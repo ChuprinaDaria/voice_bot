@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*\$py.class
+*.so
+.Python
+venv/
+env/
+
+# Секретні файли
+.env
+*.db
+*.sqlite3
+secrets/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
