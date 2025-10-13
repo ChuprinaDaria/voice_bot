@@ -1,0 +1,12 @@
+{
+  // Use the local virtual environment for import resolution
+  "venvPath": "/home/dchuprina/projects/voice_bot",
+  "venv": ".venv",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": "warning",
+  "pythonVersion": "3.12",
+  "extraPaths": [
+    "/home/dchuprina/projects/voice_bot"
+  ],
+  "stubPath": "/home/dchuprina/projects/voice_bot/typings"
+}
