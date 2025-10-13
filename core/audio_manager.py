@@ -6,7 +6,6 @@
 import pyaudio
 import wave
 from io import BytesIO
-from pydub import AudioSegment
 
 
 class AudioManager:
@@ -18,13 +17,13 @@ class AudioManager:
     def record_audio(self, duration: int = 5) -> bytes:
         """Записує N секунд аудіо з мікрофона"""
         # TODO: Тестувати на Pi
-        pass
+        return b""
         
     def record_until_silence(self, silence_threshold: int = 500, 
                             silence_duration: float = 1.5) -> bytes:
         """Записує поки не буде тиша 1.5 сек"""
         # TODO: Тестувати на Pi
-        pass
+        return b""
         
     def play_audio(self, audio_data: bytes) -> None:
         """Відтворює аудіо через динаміки"""
