@@ -12,6 +12,7 @@ pydantic-settings>=2.2,<3
 
 # Для голосу
 pvporcupine==3.0.0
+pyaudioop>=0.3
 
 # Для Pi GPIO
 gpiozero==2.0.1
