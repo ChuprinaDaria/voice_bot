@@ -1,3 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+.env
+*.pyc
+*.pyo
 # Python
 __pycache__/
 *.py[cod]
