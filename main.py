@@ -94,7 +94,7 @@ def main() -> None:
     oauth_thread = threading.Thread(target=run_server, daemon=True)
     oauth_thread.start()
     # Примітка: logger не налаштований — залишаємо print/стандартні логи fastapi/uvicorn
-    print("🌐 OAuth server thread started (https://voicebot.laztsoft.pl)")
+    print("🌐 OAuth server thread started (https://voicebot.lazysoft.pl)")
 
     app.run_polling()
 
