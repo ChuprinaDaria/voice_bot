@@ -141,8 +141,9 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
         return
 
-    # Почати розмову (локально на пристрої)
-    if text in ["🎙️ Почати розмову"]:
+    # Почати розмову (локально на пристрої) — підтримка без емодзі/англ
+    normalized = (text or "").strip().lower().replace("🎙️", "").strip()
+    if normalized in ["почати розмову", "start conversation"]:
         started = voice_daemon_manager.start_for_user(user_id, listen_immediately=True)
         if started:
             await message.reply_text("✅ Режим розмови запущено на пристрої")
@@ -424,6 +425,24 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = getattr(context, "user_data", None)
         if isinstance(user_data, dict):
             user_data['awaiting_personality'] = True
+    
+    # Швидке збереження промпту без входу в стан: "Промпт: ..." / "Prompt: ..."
+    elif isinstance(text, str) and (text.lower().startswith("промпт:") or text.lower().startswith("prompt:")):
+        new_prompt = text.split(":", 1)[1].strip() if (":" in text) else ""
+        if not new_prompt:
+            await message.reply_text(
+                "❌ Не вдалося розпізнати текст після 'Промпт:'" if user.language == "uk" else "❌ No text after 'Prompt:'"
+            )
+            db.close()
+            return
+        user.personality_prompt = new_prompt
+        db.commit()
+        await message.reply_text(
+            ("✅ Особистість оновлено!" if user.language == "uk" else "✅ Personality updated!"),
+            reply_markup=setup_menu_keyboard(user.language)
+        )
+        db.close()
+        return
 
     # Назад до налаштувань
     elif text in ["🔙 Назад до налаштувань", "🔙 Back to Settings"]:
