@@ -38,8 +38,12 @@ class VoiceDaemon:
             return True
         return False
         
-    def start(self):
-        """Запускає daemon"""
+    def start(self, listen_immediately: bool = False):
+        """Запускає daemon
+
+        Args:
+            listen_immediately: Якщо True — одразу записати команду без wake word
+        """
         if not self.load_user_settings():
             print("❌ Користувач не знайдений")
             return
@@ -48,7 +52,17 @@ class VoiceDaemon:
         print(f"✅ Daemon запущено (мова: {self.language})")
         
         while self.is_running:
-            # Слухаємо wake word
+            # Якщо потрібно одразу слухати — один раз виконуємо команду
+            if listen_immediately:
+                try:
+                    led_controller.start_listening()
+                except Exception:
+                    pass
+                self.handle_command()
+                listen_immediately = False
+                continue
+
+            # Звичайний режим: чекаємо wake word
             if self.wake_word.listen():
                 print("🎤 Wake word detected!")
                 try:

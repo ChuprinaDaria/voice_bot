@@ -143,7 +143,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Почати розмову (локально на пристрої)
     if text in ["🎙️ Почати розмову"]:
-        started = voice_daemon_manager.start_for_user(user_id)
+        started = voice_daemon_manager.start_for_user(user_id, listen_immediately=True)
         if started:
             await message.reply_text("✅ Режим розмови запущено на пристрої")
         else:

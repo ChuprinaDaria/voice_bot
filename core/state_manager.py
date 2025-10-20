@@ -17,15 +17,23 @@ class VoiceDaemonManager:
         self._user_id_to_thread: Dict[int, threading.Thread] = {}
         self._user_id_to_daemon: Dict[int, VoiceDaemon] = {}
 
-    def start_for_user(self, telegram_user_id: int) -> bool:
-        """Запускає VoiceDaemon у фоні для користувача. Повертає True, якщо запущено зараз."""
+    def start_for_user(self, telegram_user_id: int, listen_immediately: bool = False) -> bool:
+        """Запускає VoiceDaemon у фоні для користувача. Повертає True, якщо запущено зараз.
+
+        Args:
+            telegram_user_id: ID користувача Telegram
+            listen_immediately: Якщо True — одразу почати слухати без wake word
+        """
         with self._lock:
             existing_thread = self._user_id_to_thread.get(telegram_user_id)
             if existing_thread and existing_thread.is_alive():
                 return False
 
             daemon = VoiceDaemon(telegram_user_id)
-            thread = threading.Thread(target=daemon.start, daemon=True)
+            thread = threading.Thread(
+                target=lambda: daemon.start(listen_immediately=listen_immediately),
+                daemon=True,
+            )
 
             self._user_id_to_daemon[telegram_user_id] = daemon
             self._user_id_to_thread[telegram_user_id] = thread
