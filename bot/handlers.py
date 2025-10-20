@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 from storage.database import SessionLocal
 from storage.models import ActivationCode, User
 from .keyboards import main_menu_keyboard, setup_menu_keyboard, api_keys_keyboard, language_keyboard, voice_control_keyboard
+from core.state_manager import voice_daemon_manager
 from core.api_manager import api_manager
 from integrations.spotify import spotify_manager
 from integrations.google_calendar import google_calendar_manager
@@ -137,6 +138,16 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else "👋 Hi! I'm VoiceBot.\n\nPlease enter your activation code (format: VBOT-XXXX-XXXX-XXXX)"
                 )
             )
+        db.close()
+        return
+
+    # Почати розмову (локально на пристрої)
+    if text in ["🎙️ Почати розмову"]:
+        started = voice_daemon_manager.start_for_user(user_id)
+        if started:
+            await message.reply_text("✅ Режим розмови запущено на пристрої")
+        else:
+            await message.reply_text("ℹ️ Режим вже запущений")
         db.close()
         return
 
@@ -442,16 +453,18 @@ async def voice_control_handler(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = tg_user.id
 
     if text in ["🎤 Увімкнути голос", "🎤 Enable Voice"]:
-        # TODO: Запустити daemon на Pi
-        # Поки заглушка
-        await message.reply_text(
-            "✅ Голосовий режим увімкнено!\n\n"
-            "⚠️ Це працює тільки на Raspberry Pi"
-        )
+        started = voice_daemon_manager.start_for_user(user_id)
+        if started:
+            await message.reply_text("✅ Голосовий режим увімкнено на пристрої")
+        else:
+            await message.reply_text("ℹ️ Голосовий режим вже працює")
         
     elif text in ["🔇 Вимкнути голос", "🔇 Disable Voice"]:
-        # TODO: Зупинити daemon на Pi
-        await message.reply_text("🔇 Голосовий режим вимкнено")
+        stopped = voice_daemon_manager.stop_for_user(user_id)
+        if stopped:
+            await message.reply_text("🔇 Голосовий режим вимкнено")
+        else:
+            await message.reply_text("ℹ️ Голосовий режим вже вимкнений")
 
 async def openai_key_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробка введення OpenAI API ключа"""

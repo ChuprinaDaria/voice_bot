@@ -26,17 +26,25 @@ class Settings(BaseSettings):
     # Spotify
     SPOTIFY_CLIENT_ID: Optional[str] = Field(default=None)
     SPOTIFY_CLIENT_SECRET: Optional[str] = Field(default=None)
-    SPOTIFY_REDIRECT_URI: Optional[str] = Field(default=None)
+    SPOTIFY_REDIRECT_URI: Optional[str] = Field(default="https://voicebot.lazysoft.pl/spotify/callback")
 
     # Google
     GOOGLE_CREDENTIALS_PATH: str = Field(default=str(PROJECT_ROOT / "secrets" / "client_secret_763674966520-mm4jf3km7du4k23h6s963bh6qaak7qfv.apps.googleusercontent.com.json"))
-    GOOGLE_REDIRECT_URI: Optional[str] = Field(default=None)
+    GOOGLE_REDIRECT_URI: Optional[str] = Field(default="https://voicebot.lazysoft.pl/google/callback")
 
     # Domain & Redirects
-    DOMAIN: str = Field(default="voicebot.laztsoft.pl")
+    DOMAIN: str = Field(default="voicebot.lazysoft.pl")
 
     # Security
     ENCRYPTION_KEY: Optional[str] = Field(default=None, description="URL-safe base64-encoded 32-byte key for Fernet")
+
+    # Picovoice (Wake Word)
+    PICOVOICE_ACCESS_KEY: Optional[str] = Field(default=None)
+    WAKE_WORD: str = Field(default="hey google", description="Wake word для Porcupine (hey google, alexa, ok google)")
+
+    # LED Control
+    LED_GPIO_PIN: int = Field(default=18, description="GPIO pin для WS2812B LED кільця")
+    LED_COUNT: int = Field(default=12, description="Кількість LED діодів")
 
     # Voice bot defaults
     DEFAULT_LANGUAGE: str = Field(default="uk")
@@ -83,6 +91,14 @@ class Settings(BaseSettings):
         return self.ENCRYPTION_KEY
 
     @property
+    def picovoice_access_key(self) -> Optional[str]:
+        return self.PICOVOICE_ACCESS_KEY
+
+    @property
+    def wake_word(self) -> str:
+        return self.WAKE_WORD
+
+    @property
     def default_language(self) -> str:
         return self.DEFAULT_LANGUAGE
 
@@ -91,10 +107,17 @@ class Settings(BaseSettings):
         return self.VOICE_GENDER
 
     @property
+    def led_gpio_pin(self) -> int:
+        return self.LED_GPIO_PIN
+
+    @property
+    def led_count(self) -> int:
+        return self.LED_COUNT
+
+    @property
     def database_url(self) -> str:
         return self.DATABASE_URL
 
-settings = Settings()
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()

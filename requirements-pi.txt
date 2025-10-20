@@ -18,4 +18,7 @@ audioop-lts
 gpiozero==2.0.1
 RPi.GPIO==0.7.1
 
+## WS2812B LED
+rpi_ws281x==4.3.4
+
 
