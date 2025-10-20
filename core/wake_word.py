@@ -10,15 +10,15 @@ from typing import Optional, Any, cast
 
 from config import get_settings
 
-# Спроба імпорту Porcupine
+# Спроба імпорту Porcupine (на Pi 5 може кидати NotImplementedError / інші помилки)
 pvporcupine: Any | None = None
 try:
     import pvporcupine as _pvporcupine  # type: ignore
     pvporcupine = _pvporcupine
     PORCUPINE_AVAILABLE = True
-except ImportError:
+except Exception as e:  # noqa: BLE001 - показуємо причину, але працюємо у fallback
     PORCUPINE_AVAILABLE = False
-    print("⚠️  pvporcupine не встановлено. Wake word detection недоступний.")
+    print(f"⚠️  pvporcupine недоступний: {e}. Wake word буде вимкнено (fallback режим).")
 
 
 class WakeWordDetector:
