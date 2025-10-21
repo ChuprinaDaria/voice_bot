@@ -164,70 +164,6 @@ class WakeWordDetector:
         if last_error:
             print(f"⚠️ Помилка при відкритті мікрофона (остаточно): {last_error}")
 
-    def _check_wake_word(self) -> bool:
-        """
-        Перевіряє чи було сказано wake word "Орест"
-        Записує коротке аудіо і розпізнає через Whisper
-        """
-        try:
-            print("👂 Перевіряю чи це 'Орест'...")
-            
-            # Записуємо 2 секунди аудіо
-            frames = []
-            for _ in range(int(self.sample_rate / self.chunk_size * 2)):  # 2 секунди
-                if self.stream:
-                    data = self.stream.read(self.chunk_size, exception_on_overflow=False)
-                    frames.append(data)
-            
-            # Зберігаємо в WAV
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                temp_file = f.name
-            
-            wf = wave.open(temp_file, 'wb')
-            wf.setnchannels(1)
-            wf.setsampwidth(2)  # 16-bit
-            wf.setframerate(self.sample_rate)
-            wf.writeframes(b''.join(frames))
-            wf.close()
-            
-            # Розпізнаємо через Whisper (використовуємо глобальний ключ з .env)
-            from openai import OpenAI
-            from config import settings
-            
-            api_key = settings.openai_api_key
-            if not api_key:
-                print("⚠️  Немає OpenAI ключа для wake word")
-                return True  # Пропускаємо перевірку
-            
-            client = OpenAI(api_key=api_key)
-            with open(temp_file, 'rb') as f:
-                response = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=f,
-                    language="uk"
-                )
-            text = response.text.lower()
-            
-            # Видаляємо тимчасовий файл
-            os.unlink(temp_file)
-            
-            print(f"🎧 Почув: '{text}'")
-            
-            # Перевіряємо чи є "орест" в розпізнаному тексті
-            wake_words = ["орест", "orest", "арест", "рест"]  # Варіанти розпізнавання
-            if any(word in text for word in wake_words):
-                print("✅ Wake word 'Орест' розпізнано!")
-                return True
-            else:
-                print("❌ Не wake word, продовжую слухати...")
-                return False
-                
-        except Exception as e:
-            print(f"⚠️  Помилка перевірки wake word: {e}")
-            # При помилці пропускаємо (працюємо як звичайний VAD)
-            return True
-    
     def _auto_calibrate_threshold(self) -> None:
         """Вимірює фоновий шум і уточнює поріг VAD."""
         if not self.stream:
@@ -436,13 +372,7 @@ class WakeWordDetector:
                         print(f"✓ Звук: RMS={rms} ({active_chunks}/{self.vad_chunks_count})")
                         if active_chunks >= self.vad_chunks_count:
                             print("🎤 Голосову активність виявлено!")
-                            # Перевіряємо чи це wake word "Орест"
-                            if self._check_wake_word():
-                                return True
-                            else:
-                                # Не wake word - продовжуємо слухати
-                                active_chunks = 0
-                                silence_chunks = 0
+                            return True
                     else:
                         # Дозволяємо 2 тихих чанки перед скиданням
                         silence_chunks += 1

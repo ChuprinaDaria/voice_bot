@@ -17,7 +17,7 @@ class NamedBytesIO(BytesIO):
 
 def transcribe_audio(telegram_user_id: int, audio_file: str | bytes | BinaryIO, language: str = "uk") -> str:
     """
-    Розпізнавання голосу з використанням OpenAI Whisper без запису на диск.
+    Розпізнавання голосу через OpenAI Whisper API
     
     Args:
         telegram_user_id: ID користувача Telegram
@@ -30,10 +30,10 @@ def transcribe_audio(telegram_user_id: int, audio_file: str | bytes | BinaryIO, 
     import time
     start_time = time.time()
     
+    print("🎧 Розпізнаю голос через Whisper...")
+    
     api_key = api_manager.get_openai_key(telegram_user_id)
     client = OpenAI(api_key=api_key)
-    
-    print("🎧 Розпізнаю голос через Whisper...")
 
     # Whisper API приймає ISO 639-1 коди мов
     # uk = українська, en = англійська, de = німецька
@@ -42,7 +42,7 @@ def transcribe_audio(telegram_user_id: int, audio_file: str | bytes | BinaryIO, 
             response = client.audio.transcriptions.create(
                 model="whisper-1", 
                 file=f,
-                language=language  # Вказуємо мову для точнішого розпізнавання
+                language=language
             )
     elif isinstance(audio_file, bytes):
         # Обробка in-memory bytes без файлової системи
