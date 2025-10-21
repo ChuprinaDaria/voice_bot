@@ -274,12 +274,20 @@ class VoiceDaemon:
                 print(f"⚠️  Ollama недоступна: {ollama_error}")
             
             # FALLBACK: Якщо Ollama не працює - використовуємо API
-            api_key = api_manager.get_openai_key(self.user_id)
+            # Спочатку перевіряємо Groq з .env
+            from config import settings
+            groq_key = settings.groq_api_key
+            
+            if groq_key:
+                # Використовуємо Groq з .env
+                api_key = groq_key
+                is_groq = True
+            else:
+                # Fallback: OpenAI/Groq з БД користувача
+                api_key = api_manager.get_openai_key(self.user_id)
+                is_groq = api_key.startswith("gsk_") if api_key else False
             
             if api_key:
-                # Визначаємо чи це Groq API ключ (починається з "gsk_")
-                is_groq = api_key.startswith("gsk_")
-                
                 if is_groq:
                     # Groq API (5x швидше!)
                     client = OpenAI(
