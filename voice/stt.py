@@ -27,8 +27,13 @@ def transcribe_audio(telegram_user_id: int, audio_file: str | bytes | BinaryIO, 
     Returns:
         Розпізнаний текст
     """
+    import time
+    start_time = time.time()
+    
     api_key = api_manager.get_openai_key(telegram_user_id)
     client = OpenAI(api_key=api_key)
+    
+    print("🎧 Розпізнаю голос через Whisper...")
 
     # Whisper API приймає ISO 639-1 коди мов
     # uk = українська, en = англійська, de = німецька
@@ -54,6 +59,9 @@ def transcribe_audio(telegram_user_id: int, audio_file: str | bytes | BinaryIO, 
             file=audio_file,
             language=language
         )
+    
+    elapsed = time.time() - start_time
+    print(f"⏱️  STT (Whisper) відповіла за {elapsed:.1f}s")
 
     return getattr(response, "text", "")
 

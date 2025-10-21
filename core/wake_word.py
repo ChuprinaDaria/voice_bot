@@ -71,10 +71,10 @@ class WakeWordDetector:
         
         # VAD параметри
         self.vad_threshold = 400  # Початковий поріг (буде перезаписаний після калібрування)
-        self.vad_min_duration = 0.5  # Мінімальна тривалість звуку (секунди) - збільшено для стабільності
+        self.vad_min_duration = 0.3  # Мінімальна тривалість звуку (секунди) - зменшено для чутливості
         
         # Розрахунок кількості чанків для мінімальної тривалості звуку
-        self.vad_chunks_count = int(self.vad_min_duration * self.sample_rate / self.chunk_size)
+        self.vad_chunks_count = max(3, int(self.vad_min_duration * self.sample_rate / self.chunk_size))
 
         # Відкриваємо мікрофон
         self._open_microphone()
@@ -164,6 +164,56 @@ class WakeWordDetector:
         if last_error:
             print(f"⚠️ Помилка при відкритті мікрофона (остаточно): {last_error}")
 
+    def _check_wake_word(self) -> bool:
+        """
+        Перевіряє чи було сказано wake word "Орест"
+        Записує коротке аудіо і розпізнає через Whisper
+        """
+        try:
+            print("👂 Перевіряю чи це 'Орест'...")
+            
+            # Записуємо 2 секунди аудіо
+            frames = []
+            for _ in range(int(self.sample_rate / self.chunk_size * 2)):  # 2 секунди
+                if self.stream:
+                    data = self.stream.read(self.chunk_size, exception_on_overflow=False)
+                    frames.append(data)
+            
+            # Зберігаємо в WAV
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+                temp_file = f.name
+            
+            wf = wave.open(temp_file, 'wb')
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit
+            wf.setframerate(self.sample_rate)
+            wf.writeframes(b''.join(frames))
+            wf.close()
+            
+            # Розпізнаємо через Whisper (потрібен user_id - використовуємо 0 для wake word)
+            from voice.stt import transcribe_audio
+            text = transcribe_audio(0, temp_file, language="uk").lower()
+            
+            # Видаляємо тимчасовий файл
+            os.unlink(temp_file)
+            
+            print(f"🎧 Почув: '{text}'")
+            
+            # Перевіряємо чи є "орест" в розпізнаному тексті
+            wake_words = ["орест", "orest", "арест", "рест"]  # Варіанти розпізнавання
+            if any(word in text for word in wake_words):
+                print("✅ Wake word 'Орест' розпізнано!")
+                return True
+            else:
+                print("❌ Не wake word, продовжую слухати...")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️  Помилка перевірки wake word: {e}")
+            # При помилці пропускаємо (працюємо як звичайний VAD)
+            return True
+    
     def _auto_calibrate_threshold(self) -> None:
         """Вимірює фоновий шум і уточнює поріг VAD."""
         if not self.stream:
@@ -343,6 +393,7 @@ class WakeWordDetector:
         
         try:
             active_chunks = 0
+            silence_chunks = 0
             
             # Виводимо очікування тільки раз на початку циклу
             print(f"🎤 Очікування звуку (поріг: {self.vad_threshold})...")
@@ -367,13 +418,23 @@ class WakeWordDetector:
                     # Порівнюємо з порогом
                     if rms > self.vad_threshold:
                         active_chunks += 1
+                        silence_chunks = 0  # Скидаємо лічильник тиші
                         print(f"✓ Звук: RMS={rms} ({active_chunks}/{self.vad_chunks_count})")
                         if active_chunks >= self.vad_chunks_count:
                             print("🎤 Голосову активність виявлено!")
-                            return True
+                            # Перевіряємо чи це wake word "Орест"
+                            if self._check_wake_word():
+                                return True
+                            else:
+                                # Не wake word - продовжуємо слухати
+                                active_chunks = 0
+                                silence_chunks = 0
                     else:
-                        # Скидаємо лічильник якщо тиша
-                        active_chunks = 0
+                        # Дозволяємо 2 тихих чанки перед скиданням
+                        silence_chunks += 1
+                        if silence_chunks > 2:
+                            active_chunks = 0
+                            silence_chunks = 0
                         
                 except IOError:
                     # Помилка читання - перевідкриваємо потік
