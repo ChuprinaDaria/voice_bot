@@ -129,7 +129,8 @@ class VoiceDaemon:
         audio_response = text_to_speech(
             self.user_id, 
             response, 
-            self.language
+            self.language,
+            voice="onyx"  # Глибокий чоловічий голос
         )
         try:
             led_controller.start_speaking()
@@ -221,9 +222,58 @@ class VoiceDaemon:
         except Exception as e:
             print(f"⚠️  Помилка router: {e}")
         
-        # КРОК 2: Пропускаємо через LLM (Groq/OpenAI) з промптом особистості
+        # КРОК 2: Пропускаємо через LLM (Ollama/Groq/OpenAI) з промптом особистості
         # (тільки для fallback або складних запитів)
         try:
+            # Спочатку перевіряємо чи працює Ollama (локально)
+            import time
+            start_time = time.time()
+            
+            try:
+                import httpx
+                # Перевіряємо чи доступна Ollama
+                with httpx.Client(timeout=2) as client_check:
+                    resp = client_check.get("http://localhost:11434/api/tags")
+                    if resp.status_code == 200:
+                        # Ollama доступна! Використовуємо локальну LLM
+                        print("🏠 Використовую Ollama (локальна LLM)")
+                        
+                        # Формуємо системний промт
+                        system_prompt = f"{BASE_PERSONALITY}\n\nВідповідай українською мовою коротко (1-2 речення)."
+                        
+                        if self.language == "de":
+                            system_prompt = f"{BASE_PERSONALITY}\n\nAntworte auf Deutsch kurz (1-2 Sätze)."
+                        elif self.language == "en":
+                            system_prompt = f"{BASE_PERSONALITY}\n\nAnswer in English briefly (1-2 sentences)."
+                        
+                        # Викликаємо Ollama через OpenAI-сумісний API
+                        client = OpenAI(
+                            api_key="ollama",  # Не потрібен для Ollama
+                            base_url="http://localhost:11434/v1"
+                        )
+                        
+                        response = client.chat.completions.create(
+                            model="tinyllama",  # Компактна модель для 4GB RAM
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": f"Користувач сказав: {command}\n\nВідповідай у своєму стилі."}
+                            ],
+                            max_tokens=80,
+                            temperature=0.8,
+                            timeout=10  # TinyLlama швидка
+                        )
+                        
+                        elapsed = time.time() - start_time
+                        print(f"⏱️  Ollama відповіла за {elapsed:.1f}s")
+                        
+                        if response.choices and response.choices[0].message:
+                            content = response.choices[0].message.content
+                            if content:
+                                return content
+            except Exception as ollama_error:
+                print(f"⚠️  Ollama недоступна: {ollama_error}")
+            
+            # FALLBACK: Якщо Ollama не працює - використовуємо API
             api_key = api_manager.get_openai_key(self.user_id)
             
             if api_key:
@@ -256,7 +306,6 @@ class VoiceDaemon:
                 user_prompt = f"Користувач сказав: {command}\n\nВідповідай у своєму стилі."
                 
                 # Викликаємо LLM з timeout
-                import time
                 start_time = time.time()
                 
                 response = client.chat.completions.create(

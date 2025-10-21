@@ -322,26 +322,29 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode='Markdown'
                 )
         else:
-            auth_url = spotify_manager.get_auth_url(user_id)
             if user.language == "uk":
                 text_msg = (
-                    "🎵 Підключення Spotify\n\n"
+                    "🎵 Підключення Spotify (спрощений спосіб)\n\n"
                     "📖 Інструкція:\n"
-                    "1. Натисни на посилання нижче\n"
-                    "2. Авторизуйся в Spotify\n"
-                    "3. Скопіюй код який отримаєш\n"
-                    "4. Надішли його сюди\n\n"
-                    f"🔗 [Авторизуватися]({auth_url})"
+                    "1. Іди на https://developer.spotify.com/console/post-play/\n"
+                    "2. Натисни 'Get Token' (зеленакнопка)\n"
+                    "3. Дозволь доступ (User Token)\n"
+                    "4. Скопіюй OAuth Token який з'явиться\n"
+                    "5. Надішли токен сюди\n\n"
+                    "⚠️ Токен дійсний ~1 годину, потім треба оновити\n\n"
+                    "💡 Альтернатива: скажи голосом 'Грай [назва пісні]'"
                 )
             else:
                 text_msg = (
-                    "🎵 Connect Spotify\n\n"
+                    "🎵 Connect Spotify (simplified)\n\n"
                     "📖 Instructions:\n"
-                    "1. Click link below\n"
-                    "2. Authorize in Spotify\n"
-                    "3. Copy the code you receive\n"
-                    "4. Send it here\n\n"
-                    f"🔗 [Authorize]({auth_url})"
+                    "1. Go to https://developer.spotify.com/console/post-play/\n"
+                    "2. Click 'Get Token' (green button)\n"
+                    "3. Allow access (User Token)\n"
+                    "4. Copy the OAuth Token\n"
+                    "5. Send token here\n\n"
+                    "⚠️ Token valid ~1 hour, then renew\n\n"
+                    "💡 Alternative: say 'Play [song name]' by voice"
                 )
 
             await message.reply_text(
@@ -375,26 +378,35 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode='Markdown'
                 )
         else:
-            auth_url = google_calendar_manager.get_auth_url(user_id)
             if user.language == "uk":
                 text_msg = (
-                    "📅 Підключення Google Calendar\n\n"
+                    "📅 Підключення Google Calendar (спрощений спосіб)\n\n"
                     "📖 Інструкція:\n"
-                    "1. Натисни на посилання\n"
-                    "2. Авторизуйся в Google\n"
-                    "3. Скопіюй код\n"
-                    "4. Надішли його сюди\n\n"
-                    f"🔗 [Авторизуватися]({auth_url})"
+                    "1. Іди на https://developers.google.com/oauthplayground\n"
+                    "2. У лівій панелі натисни '+ Add scopes'\n"
+                    "3. Знайди 'Calendar API v3' → обери `.../auth/calendar.readonly`\n"
+                    "4. Натисни 'Authorize APIs' (синя кнопка)\n"
+                    "5. Дозволь доступ до календаря\n"
+                    "6. Натисни 'Exchange authorization code for tokens'\n"
+                    "7. Скопіюй **Access token** (не refresh!)\n"
+                    "8. Надішли токен сюди\n\n"
+                    "⚠️ Токен дійсний ~1 годину\n\n"
+                    "💡 Альтернатива: скажи голосом 'Які події сьогодні?'"
                 )
             else:
                 text_msg = (
-                    "📅 Connect Google Calendar\n\n"
+                    "📅 Connect Google Calendar (simplified)\n\n"
                     "📖 Instructions:\n"
-                    "1. Click link\n"
-                    "2. Authorize in Google\n"
-                    "3. Copy code\n"
-                    "4. Send it here\n\n"
-                    f"🔗 [Authorize]({auth_url})"
+                    "1. Go to https://developers.google.com/oauthplayground\n"
+                    "2. In left panel, click '+ Add scopes'\n"
+                    "3. Find 'Calendar API v3' → select `.../auth/calendar.readonly`\n"
+                    "4. Click 'Authorize APIs' (blue button)\n"
+                    "5. Allow calendar access\n"
+                    "6. Click 'Exchange authorization code for tokens'\n"
+                    "7. Copy **Access token** (not refresh!)\n"
+                    "8. Send token here\n\n"
+                    "⚠️ Token valid ~1 hour\n\n"
+                    "💡 Alternative: say 'What events today?' by voice"
                 )
 
             await message.reply_text(
@@ -556,7 +568,7 @@ async def openai_key_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def spotify_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка Spotify authorization code"""
+    """Обробка Spotify токена (спрощений варіант)"""
     user_data = getattr(context, "user_data", None)
     if not (isinstance(user_data, dict) and user_data.get('awaiting_spotify_code')):
         return
@@ -567,20 +579,27 @@ async def spotify_code_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     user_id = tg_user.id
-    code = (message.text or "").strip()
+    token = (message.text or "").strip()
 
-    await message.reply_text("🔄 Обробляю код...")
-    await message.reply_text(
-        "⚠️ Spotify OAuth потребує веб-сервер.\n"
-        "Ця функція в розробці.\n\n"
-        "Поки що використовуй голосові команди без Spotify."
-    )
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_user_id == user_id).first()
+    finally:
+        db.close()
+
+    if not user:
+        return
+
+    await message.reply_text("🔄 Перевіряю токен..." if user.language == "uk" else "🔄 Checking token...")
+    
+    success, msg = spotify_manager.set_token_manually(user_id, token)
+    await message.reply_text(msg)
 
     user_data['awaiting_spotify_code'] = False
 
 
 async def google_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка Google authorization code"""
+    """Обробка Google Calendar токена (спрощений варіант)"""
     user_data = getattr(context, "user_data", None)
     if not (isinstance(user_data, dict) and user_data.get('awaiting_google_code')):
         return
@@ -591,13 +610,22 @@ async def google_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     user_id = tg_user.id
-    code = (message.text or "").strip()
+    token = (message.text or "").strip()
 
-    await message.reply_text("🔄 Обробляю код...")
-    await message.reply_text(
-        "⚠️ Google OAuth потребує веб-сервер.\n"
-        "Ця функція в розробці."
-    )
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_user_id == user_id).first()
+    finally:
+        db.close()
+
+    if not user:
+        return
+
+    await message.reply_text("🔄 Перевіряю токен..." if user.language == "uk" else "🔄 Checking token...")
+    
+    # Використовуємо простий метод (тільки access token)
+    success, msg = google_calendar_manager.save_token_simple(user_id, token)
+    await message.reply_text(msg)
 
     user_data['awaiting_google_code'] = False
 
