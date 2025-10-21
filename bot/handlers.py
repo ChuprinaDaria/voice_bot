@@ -11,7 +11,7 @@ from storage.models import ActivationCode, User
 from .keyboards import main_menu_keyboard, setup_menu_keyboard, api_keys_keyboard, language_keyboard, voice_control_keyboard
 from core.state_manager import voice_daemon_manager
 from core.api_manager import api_manager
-from integrations.spotify import spotify_manager
+from integrations.mopidy import mopidy_manager
 from integrations.google_calendar import google_calendar_manager
 
 
@@ -305,56 +305,60 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ud["awaiting_wifi_creds"] = False
 
     # Spotify
-    elif text in ["🎵 Spotify", "🎵 Підключити Spotify", "🎵 Connect Spotify"]:
-        if spotify_manager.is_connected(user_id):
+    elif text in ["🎵 Spotify", "🎵 Музика", "🎵 Music"]:
+        # Перевіряємо чи запущений Mopidy
+        if mopidy_manager.is_running():
             if user.language == "uk":
                 await message.reply_text(
-                    "✅ Spotify вже підключено!\n\n"
-                    "Щоб відтворити пісню, надішли:\n"
-                    "`Грай: Назва пісні`",
+                    "✅ Музичний сервер працює!\n\n"
+                    "🎵 Доступні команди голосом:\n"
+                    "• 'Грай Imagine Dragons'\n"
+                    "• 'Включи музику'\n"
+                    "• 'Пауза'\n"
+                    "• 'Наступна пісня'\n\n"
+                    "📖 Mopidy шукає музику на:\n"
+                    "✅ Spotify\n"
+                    "✅ YouTube Music\n"
+                    "✅ Локальні файли\n\n"
+                    "⚙️ Налаштування: /etc/mopidy/mopidy.conf",
                     parse_mode='Markdown'
                 )
             else:
                 await message.reply_text(
-                    "✅ Spotify already connected!\n\n"
-                    "To play a song, send:\n"
-                    "`Play: Song name`",
+                    "✅ Music server is running!\n\n"
+                    "🎵 Available voice commands:\n"
+                    "• 'Play Imagine Dragons'\n"
+                    "• 'Play music'\n"
+                    "• 'Pause'\n"
+                    "• 'Next song'\n\n"
+                    "📖 Mopidy searches music on:\n"
+                    "✅ Spotify\n"
+                    "✅ YouTube Music\n"
+                    "✅ Local files\n\n"
+                    "⚙️ Settings: /etc/mopidy/mopidy.conf",
                     parse_mode='Markdown'
                 )
         else:
             if user.language == "uk":
-                text_msg = (
-                    "🎵 Підключення Spotify (спрощений спосіб)\n\n"
-                    "📖 Інструкція:\n"
-                    "1. Іди на https://developer.spotify.com/console/post-play/\n"
-                    "2. Натисни 'Get Token' (зеленакнопка)\n"
-                    "3. Дозволь доступ (User Token)\n"
-                    "4. Скопіюй OAuth Token який з'явиться\n"
-                    "5. Надішли токен сюди\n\n"
-                    "⚠️ Токен дійсний ~1 годину, потім треба оновити\n\n"
-                    "💡 Альтернатива: скажи голосом 'Грай [назва пісні]'"
+                await message.reply_text(
+                    "❌ Музичний сервер не запущений\n\n"
+                    "📖 Для запуску:\n"
+                    "```bash\n"
+                    "sudo systemctl start mopidy\n"
+                    "```\n\n"
+                    "📚 Інструкція з налаштування: MOPIDY_SETUP.md",
+                    parse_mode='Markdown'
                 )
             else:
-                text_msg = (
-                    "🎵 Connect Spotify (simplified)\n\n"
-                    "📖 Instructions:\n"
-                    "1. Go to https://developer.spotify.com/console/post-play/\n"
-                    "2. Click 'Get Token' (green button)\n"
-                    "3. Allow access (User Token)\n"
-                    "4. Copy the OAuth Token\n"
-                    "5. Send token here\n\n"
-                    "⚠️ Token valid ~1 hour, then renew\n\n"
-                    "💡 Alternative: say 'Play [song name]' by voice"
+                await message.reply_text(
+                    "❌ Music server not running\n\n"
+                    "📖 To start:\n"
+                    "```bash\n"
+                    "sudo systemctl start mopidy\n"
+                    "```\n\n"
+                    "📚 Setup guide: MOPIDY_SETUP.md",
+                    parse_mode='Markdown'
                 )
-
-            await message.reply_text(
-                text_msg,
-                parse_mode='Markdown',
-                disable_web_page_preview=True
-            )
-            user_data = getattr(context, "user_data", None)
-            if isinstance(user_data, dict):
-                user_data['awaiting_spotify_code'] = True
 
     # Google Calendar
     elif text in ["📅 Календар", "📅 Підключити Google Calendar", "📅 Connect Google Calendar"]:
@@ -567,35 +571,7 @@ async def openai_key_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user_data["awaiting_openai_key"] = False
 
 
-async def spotify_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка Spotify токена (спрощений варіант)"""
-    user_data = getattr(context, "user_data", None)
-    if not (isinstance(user_data, dict) and user_data.get('awaiting_spotify_code')):
-        return
-
-    tg_user = update.effective_user
-    message = update.message
-    if tg_user is None or message is None:
-        return
-
-    user_id = tg_user.id
-    token = (message.text or "").strip()
-
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.telegram_user_id == user_id).first()
-    finally:
-        db.close()
-
-    if not user:
-        return
-
-    await message.reply_text("🔄 Перевіряю токен..." if user.language == "uk" else "🔄 Checking token...")
-    
-    success, msg = spotify_manager.set_token_manually(user_id, token)
-    await message.reply_text(msg)
-
-    user_data['awaiting_spotify_code'] = False
+# Spotify code handler видалено - Mopidy не потребує токенів від користувачів
 
 
 async def google_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

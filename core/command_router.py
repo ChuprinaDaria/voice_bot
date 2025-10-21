@@ -249,26 +249,18 @@ def _get_weather_response(language: str) -> str:
 
 
 def _process_spotify_command(params: Optional[Dict[str, Any]], language: str, user_id: Optional[int]) -> str:
-    """Обробка Spotify команд (включення музики)"""
-    if not user_id:
-        if language == "uk":
-            return "❌ Не вдалося визначити користувача."
-        elif language == "de":
-            return "❌ Benutzer konnte nicht ermittelt werden."
-        else:
-            return "❌ Could not identify user."
-    
+    """Обробка музичних команд через Mopidy (Spotify/YouTube/локальні файли)"""
     try:
-        from integrations.spotify import spotify_manager
+        from integrations.mopidy import mopidy_manager
         
-        # Перевіряємо чи Spotify підключений
-        if not spotify_manager.is_connected(user_id):
+        # Перевіряємо чи запущений Mopidy
+        if not mopidy_manager.is_running():
             if language == "uk":
-                return "❌ Spotify не підключено. Налаштуй його через бота в Telegram."
+                return "❌ Музичний сервер не запущений. Запусти: sudo systemctl start mopidy"
             elif language == "de":
-                return "❌ Spotify nicht verbunden. Konfigurieren Sie es über den Telegram-Bot."
+                return "❌ Musikserver läuft nicht. Starten: sudo systemctl start mopidy"
             else:
-                return "❌ Spotify not connected. Configure it via the Telegram bot."
+                return "❌ Music server not running. Start: sudo systemctl start mopidy"
         
         # Якщо є параметр з назвою пісні - шукаємо і включаємо
         track_name = None
@@ -278,26 +270,22 @@ def _process_spotify_command(params: Optional[Dict[str, Any]], language: str, us
             track_name = params["action"]
         
         if track_name:
-            # Включаємо конкретний трек
-            success, message = spotify_manager.play_track(user_id, track_name)
+            # Включаємо конкретний трек (шукає на Spotify, YouTube, локально)
+            success, message = mopidy_manager.play_track(track_name, source="any")
             return message
         else:
-            # Просто включаємо останню музику (resume)
-            if language == "uk":
-                return "▶️ Включаю музику на Spotify..."
-            elif language == "de":
-                return "▶️ Spiele Musik auf Spotify..."
-            else:
-                return "▶️ Playing music on Spotify..."
+            # Просто відновлюємо відтворення
+            success, message = mopidy_manager.resume()
+            return message
                 
     except Exception as e:
-        print(f"❌ Помилка Spotify: {e}")
+        print(f"❌ Помилка Mopidy: {e}")
         if language == "uk":
-            return f"❌ Помилка при роботі зі Spotify: {str(e)}"
+            return f"❌ Помилка музичного сервера: {str(e)}"
         elif language == "de":
-            return f"❌ Fehler bei Spotify: {str(e)}"
+            return f"❌ Musikserver-Fehler: {str(e)}"
         else:
-            return f"❌ Spotify error: {str(e)}"
+            return f"❌ Music server error: {str(e)}"
 
 
 def _process_calendar_command(params: Optional[Dict[str, Any]], language: str, user_id: Optional[int]) -> str:
