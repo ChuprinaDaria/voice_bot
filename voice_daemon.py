@@ -221,13 +221,28 @@ class VoiceDaemon:
         except Exception as e:
             print(f"⚠️  Помилка router: {e}")
         
-        # КРОК 2: Пропускаємо через OpenAI з промптом особистості
+        # КРОК 2: Пропускаємо через LLM (Groq/OpenAI) з промптом особистості
         # (тільки для fallback або складних запитів)
         try:
             api_key = api_manager.get_openai_key(self.user_id)
             
             if api_key:
-                client = OpenAI(api_key=api_key)
+                # Визначаємо чи це Groq API ключ (починається з "gsk_")
+                is_groq = api_key.startswith("gsk_")
+                
+                if is_groq:
+                    # Groq API (5x швидше!)
+                    client = OpenAI(
+                        api_key=api_key,
+                        base_url="https://api.groq.com/openai/v1"
+                    )
+                    model = "llama-3.1-8b-instant"  # Швидка модель
+                    print("⚡ Використовую Groq API (швидкий режим)")
+                else:
+                    # Стандартний OpenAI
+                    client = OpenAI(api_key=api_key)
+                    model = "gpt-3.5-turbo"
+                    print("🤖 Використовую OpenAI API")
                 
                 # Формуємо системний промт
                 system_prompt = f"{BASE_PERSONALITY}\n\nВідповідай українською мовою коротко (1-2 речення)."
@@ -240,16 +255,23 @@ class VoiceDaemon:
                 # Формуємо prompt користувача
                 user_prompt = f"Користувач сказав: {command}\n\nВідповідай у своєму стилі."
                 
-                # Викликаємо OpenAI
+                # Викликаємо LLM з timeout
+                import time
+                start_time = time.time()
+                
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model=model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    max_tokens=150,
-                    temperature=0.8
+                    max_tokens=80,  # Зменшено для швидших відповідей
+                    temperature=0.8,
+                    timeout=15  # Максимум 15 секунд
                 )
+                
+                elapsed = time.time() - start_time
+                print(f"⏱️  LLM відповіла за {elapsed:.1f}s")
                 
                 if response.choices and response.choices[0].message:
                     content = response.choices[0].message.content
@@ -287,7 +309,7 @@ class VoiceDaemon:
         
         language_responses = responses.get(self.language, responses["en"])
         return random.choice(language_responses)
-    
+        
     def stop(self):
         """Зупиняє daemon"""
         self.is_running = False

@@ -227,30 +227,30 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Оберіть мову / Choose language:", reply_markup=language_keyboard()
         )
 
-    # OpenAI API Key
+    # OpenAI/Groq API Key
     elif text in ["🔑 OpenAI API Key"]:
         if user.language == "uk":
             text_msg = (
-                "🔑 OpenAI API Key\n\n"
-                "Надішли свій ключ API у форматі:\n"
-                "`sk-proj-xxxxxxxxxxxxx`\n\n"
-                "📖 Де взяти ключ?\n"
-                "1. Іди на https://platform.openai.com\n"
-                "2. Account → API Keys\n"
-                "3. Create new secret key\n"
-                "4. Скопіюй і надішли сюди\n\n"
+                "🔑 API Ключ (OpenAI або Groq)\n\n"
+                "Надішли свій ключ API:\n\n"
+                "🔵 **OpenAI** (повільніше):\n"
+                "`sk-proj-xxxxxxxxxxxxx`\n"
+                "Реєстрація: https://platform.openai.com\n\n"
+                "⚡ **Groq** (5x швидше, рекомендую!):\n"
+                "`gsk_xxxxxxxxxxxxx`\n"
+                "Реєстрація: https://console.groq.com/keys\n\n"
                 "⚠️ Ключ зберігається зашифрованим"
             )
         else:
             text_msg = (
-                "🔑 OpenAI API Key\n\n"
-                "Send your API key in format:\n"
-                "`sk-proj-xxxxxxxxxxxxx`\n\n"
-                "📖 Where to get the key?\n"
-                "1. Go to https://platform.openai.com\n"
-                "2. Account → API Keys\n"
-                "3. Create new secret key\n"
-                "4. Copy and send here\n\n"
+                "🔑 API Key (OpenAI or Groq)\n\n"
+                "Send your API key:\n\n"
+                "🔵 **OpenAI** (slower):\n"
+                "`sk-proj-xxxxxxxxxxxxx`\n"
+                "Sign up: https://platform.openai.com\n\n"
+                "⚡ **Groq** (5x faster, recommended!):\n"
+                "`gsk_xxxxxxxxxxxxx`\n"
+                "Sign up: https://console.groq.com/keys\n\n"
                 "⚠️ Key is stored encrypted"
             )
 
@@ -500,16 +500,27 @@ async def openai_key_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not user:
         return
 
-    # Перевіряємо формат ключа
-    if not api_key.startswith("sk-"):
+    # Перевіряємо формат ключа (OpenAI або Groq)
+    is_openai = api_key.startswith("sk-")
+    is_groq = api_key.startswith("gsk_")
+    
+    if not is_openai and not is_groq:
         if user.language == "uk":
             await message.reply_text(
-                "❌ Невірний формат ключа.\n" "Ключ має починатися з `sk-`",
+                "❌ Невірний формат ключа!\n\n"
+                "Ключ повинен починатися з:\n"
+                "• `sk-` (OpenAI)\n"
+                "• `gsk_` (Groq - 5x швидше!)\n\n"
+                "Спробуй ще раз:",
                 parse_mode="Markdown",
             )
         else:
             await message.reply_text(
-                "❌ Invalid key format.\n" "Key must start with `sk-`",
+                "❌ Invalid key format!\n\n"
+                "Key should start with:\n"
+                "• `sk-` (OpenAI)\n"
+                "• `gsk_` (Groq - 5x faster!)\n\n"
+                "Try again:",
                 parse_mode="Markdown",
             )
         return
