@@ -15,7 +15,7 @@ class MopidyManager:
 
     def __init__(self, host: str = "127.0.0.1", port: int = 6680) -> None:
         self.base_url = f"http://{host}:{port}/mopidy/rpc"
-        self.timeout = 10
+        self.timeout = 30  # Збільшено для YouTube пошуку
 
     def _rpc_call(self, method: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """Виконує JSON-RPC виклик до Mopidy"""
@@ -68,7 +68,7 @@ class MopidyManager:
         elif source == "local":
             uris = ["local:"]
 
-        params = {"query": {"any": [query]}}
+        params: Dict[str, Any] = {"query": {"any": [query]}}
         if uris:
             params["uris"] = uris
 
@@ -78,10 +78,13 @@ class MopidyManager:
             return []
 
         # Збираємо всі треки з результатів
-        tracks = []
-        for search_result in result:
-            if "tracks" in search_result:
-                tracks.extend(search_result["tracks"])
+        tracks: List[Dict[str, Any]] = []
+        if isinstance(result, list):
+            for search_result in result:
+                if isinstance(search_result, dict) and "tracks" in search_result:
+                    result_tracks = search_result.get("tracks", [])
+                    if isinstance(result_tracks, list):
+                        tracks.extend(result_tracks)
         
         return tracks
 
