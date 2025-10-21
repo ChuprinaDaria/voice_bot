@@ -36,12 +36,39 @@ def main() -> None:
         )
     )
 
-    # Обробка меню налаштувань і OpenAI API ключа та інших кнопок
+    # Обробка кнопок вибору мови - найвищий пріоритет
     app.add_handler(
         MessageHandler(
-            filters.Regex(
-                r"^(⚙️ Налаштування|⚙️ Settings|🔑 API Ключі|🔑 API Keys|🔑 OpenAI API Key|🔙 Назад до налаштувань|🔙 Back to Settings|🌐 Вибрати мову|🌐 Choose Language|Українська \(uk\)|English \(en\)|📶 Підключити WiFi|📶 Connect WiFi|🎵 Spotify|🎵 Підключити Spotify|🎵 Connect Spotify|📅 Календар|📅 Підключити Google Calendar|📅 Connect Google Calendar|🗣️ Налаштувати особистість|🗣️ Setup Personality|✅ Завершити налаштування|✅ Finish Setup|переглянути|view|скинути|reset|🎤 Голосовий режим|🎤 Voice Control)$"
-            ),
+            filters.Regex(r"^(Українська \(uk\)|English \(en\)|Deutsch \(de\))$"),
+            settings_handler,
+        )
+    )
+
+    # Обробка кнопок керування голосом - високий пріоритет
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(🎤 Увімкнути голос|🔇 Вимкнути голос|🎤 Enable Voice|🔇 Disable Voice|🎤 Stimme aktivieren|🔇 Stimme deaktivieren)$"),
+            voice_control_handler,
+        )
+    )
+
+    # Обробка кнопок меню налаштувань - кожна окрема кнопка для уникнення помилок
+    # Використовуємо список всіх можливих варіантів
+    settings_buttons = [
+        r"^⚙️ Налаштування$", r"^⚙️ Settings$", r"^⚙️ Einstellungen$",
+        r"^🔑 API Ключі$", r"^🔑 API Keys$", r"^🔑 API-Schlüsselverwaltung$",
+        r"^🔑 OpenAI API Key$",
+        r"^🔙 Назад до налаштувань$", r"^🔙 Back to Settings$", r"^🔙 Zurück zu Einstellungen$",
+        r"^🌐 Вибрати мову$", r"^🌐 Choose Language$", r"^🌐 Sprache wählen$",
+        r"^🗣️ Налаштувати особистість$", r"^🗣️ Setup Personality$", r"^🗣️ Persönlichkeit einrichten$",
+        r"^🎤 Голосовий режим$", r"^🎤 Voice Control$", r"^🎤 Sprachsteuerung$",
+        r"^✅ Завершити налаштування$", r"^✅ Finish Setup$", r"^✅ Einrichtung abschließen$",
+    ]
+    # Об'єднуємо в один regex з "|" (або)
+    settings_regex = "|".join(settings_buttons)
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(settings_regex),
             settings_handler,
         )
     )
@@ -51,6 +78,14 @@ def main() -> None:
         MessageHandler(
             filters.TEXT & filters.Regex(r"^sk-") & ~filters.COMMAND,
             openai_key_handler,
+        )
+    )
+
+    # Обробник команд перегляду/скидання особистості
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(переглянути|view|скинути|reset)$"),
+            personality_handler,
         )
     )
 
@@ -74,7 +109,7 @@ def main() -> None:
         )
     )
 
-    # Загальне текстове повідомлення (для WiFi та інших простих станів)
+    # Загальне текстове повідомлення (для інших простих станів)
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -82,19 +117,8 @@ def main() -> None:
         )
     )
 
-    # Обробники керування голосом
-    app.add_handler(
-        MessageHandler(
-            filters.Regex(r"^(🎤 Увімкнути голос|🔇 Вимкнути голос|🎤 Enable Voice|🔇 Disable Voice)$"),
-            voice_control_handler,
-        )
-    )
-
-    # Запуск OAuth сервера в окремому потоці
-    oauth_thread = threading.Thread(target=run_server, daemon=True)
-    oauth_thread.start()
-    # Примітка: logger не налаштований — залишаємо print/стандартні логи fastapi/uvicorn
-    print("🌐 OAuth server thread started (https://voicebot.lazysoft.pl)")
+    # Запуск без OAuth сервера - він нам поки не потрібен
+    print("🤖 VoiceBot запущено!")
 
     app.run_polling()
 

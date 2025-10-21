@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 from storage.database import SessionLocal
 from storage.models import ActivationCode, User
 from .keyboards import main_menu_keyboard, setup_menu_keyboard, api_keys_keyboard, language_keyboard, voice_control_keyboard
+from core.i18n import get_text
 from core.state_manager import voice_daemon_manager
 from core.api_manager import api_manager
 from integrations.spotify import spotify_manager
@@ -143,19 +144,19 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Почати розмову (локально на пристрої) — підтримка без емодзі/англ
     normalized = (text or "").strip().lower().replace("🎙️", "").strip()
-    if normalized in ["почати розмову", "start conversation"]:
+    if normalized in ["почати розмову", "start conversation", "gespräch starten"]:
         started = voice_daemon_manager.start_for_user(user_id, listen_immediately=True)
         if started:
-            await message.reply_text("✅ Режим розмови запущено на пристрої")
+            await message.reply_text(get_text("conversation_started", user.language if user else "uk"))
         else:
-            await message.reply_text("ℹ️ Режим вже запущений")
+            await message.reply_text(get_text("conversation_already_started", user.language if user else "uk"))
         db.close()
         return
 
     # Відкрити меню налаштувань
-    if text in ["⚙️ Налаштування", "⚙️ Settings"]:
+    if text in [get_text("settings", user.language if user else "uk"), "⚙️ Налаштування", "⚙️ Settings"]:
         await message.reply_text(
-            "⚙️ Меню налаштувань:" if (user and user.language == "uk") else "⚙️ Settings menu:",
+            get_text("settings_menu", user.language if user else "uk"),
             reply_markup=setup_menu_keyboard(user.language if user else "uk"),
         )
         db.close()
@@ -599,7 +600,6 @@ async def google_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def personality_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Збереження/редагування промпту особистості"""
     user_data = getattr(context, "user_data", None)
     if not (isinstance(user_data, dict) and user_data.get('awaiting_personality')):
         return
@@ -612,16 +612,16 @@ async def personality_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = tg_user.id
     text = (message.text or "").strip()
 
+    from core.personality import get_personality_prompt, set_personality_prompt
+
     db = SessionLocal()
     user = db.query(User).filter(User.telegram_user_id == user_id).first()
-
     if not user:
         db.close()
         return
 
-    # Команди
     if text.lower() in ['переглянути', 'view']:
-        current = user.personality_prompt or "Не встановлено"
+        current = get_personality_prompt(user_id) or "Не встановлено"
         await message.reply_text(
             f"🗣️ Поточний промпт:\n\n`{current}`",
             parse_mode='Markdown'
@@ -629,35 +629,43 @@ async def personality_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         db.close()
         return
 
-    elif text.lower() in ['скинути', 'reset']:
-        user.personality_prompt = None
-        db.commit()
-        await message.reply_text(
-            "✅ Промпт видалено. Бот використовуватиме стандартну поведінку.",
-            reply_markup=setup_menu_keyboard(user.language)
-        )
+    if text.lower() in ['скинути', 'reset']:
+        success = set_personality_prompt(user_id, None)
+        response = "✅ Промпт видалено. Бот використовуватиме стандартну поведінку."
+        if not success:
+            response = "❌ Помилка видалення промпту. Спробуйте пізніше."
+        await message.reply_text(response, reply_markup=setup_menu_keyboard(user.language))
         user_data['awaiting_personality'] = False
         db.close()
         return
 
-    # Новий промпт
-    user.personality_prompt = text
-    db.commit()
-
-    if user.language == "uk":
-        await message.reply_text(
-            f"✅ Особистість оновлено!\n\n"
-            f"Новий промпт:\n`{text[:100]}...`",
-            parse_mode='Markdown',
-            reply_markup=setup_menu_keyboard(user.language)
-        )
+    success = set_personality_prompt(user_id, text)
+    if success:
+        if user.language == "uk":
+            await message.reply_text(
+                f"✅ Особистість оновлено!\n\n"
+                f"Новий промпт:\n`{text[:100]}{'...' if len(text) > 100 else ''}`",
+                parse_mode='Markdown',
+                reply_markup=setup_menu_keyboard(user.language)
+            )
+        else:
+            await message.reply_text(
+                f"✅ Personality updated!\n\n"
+                f"New prompt:\n`{text[:100]}{'...' if len(text) > 100 else ''}`",
+                parse_mode='Markdown',
+                reply_markup=setup_menu_keyboard(user.language)
+            )
     else:
-        await message.reply_text(
-            f"✅ Personality updated!\n\n"
-            f"New prompt:\n`{text[:100]}...`",
-            parse_mode='Markdown',
-            reply_markup=setup_menu_keyboard(user.language)
-        )
+        if user.language == "uk":
+            await message.reply_text(
+                "❌ Помилка збереження промпту. Спробуйте пізніше або скоротіть текст.",
+                reply_markup=setup_menu_keyboard(user.language)
+            )
+        else:
+            await message.reply_text(
+                "❌ Failed to save the prompt. Please try again later or shorten the text.",
+                reply_markup=setup_menu_keyboard(user.language)
+            )
 
     user_data['awaiting_personality'] = False
     db.close()
