@@ -70,22 +70,20 @@ class WakeWordDetector:
         print(f"🔄 Wake word в режимі VAD (детекція голосу)")
         
         # VAD параметри
-        self.vad_threshold = 1000  # Базовий поріг гучності (буде автокалібрований)
+        self.vad_threshold = 400  # Початковий поріг (буде перезаписаний після калібрування)
         self.vad_min_duration = 0.3  # Мінімальна тривалість звуку (секунди)
         
         # Розрахунок кількості чанків для мінімальної тривалості звуку
         self.vad_chunks_count = int(self.vad_min_duration * self.sample_rate / self.chunk_size)
-        
-        # Попередньо коригуємо поріг від чутливості (буде уточнено автокалібруванням)
-        base_from_sens = int(1000 * (1.0 - self.sensitivity) + 300)
-        self.vad_threshold = max(self.vad_threshold, base_from_sens)
 
         # Відкриваємо мікрофон
         self._open_microphone()
 
         # Автокалібрування порогу від реального фонового шуму
         self._auto_calibrate_threshold()
-        print(f"🔧 VAD: threshold={self.vad_threshold}, min_chunks={self.vad_chunks_count}, sr={self.sample_rate}")
+        
+        # Фінальний вивід після калібрування
+        print(f"✅ VAD готовий: поріг={self.vad_threshold}, min_chunks={self.vad_chunks_count}, sr={self.sample_rate}")
     
     def _open_microphone(self):
         """Відкриває мікрофон для запису з підбором sample rate та ретраями."""
@@ -181,14 +179,13 @@ class WakeWordDetector:
                 values.append(rms)
             if values:
                 noise = sum(values) / len(values)
-                # Порог = шум * коеф. + запас, але не нижче мінімального
-                adaptive = int(noise * 2.5)  # 2.5x над середнім шумом
-                minimal = 250
-                # Врахуємо чутливість (вища чутливість — нижчий поріг)
-                sens_adjust = int(700 * (1.0 - self.sensitivity))
-                candidate = max(adaptive + sens_adjust, minimal)
-                # Не робимо надто високим, щоб не «глухнути»
-                self.vad_threshold = max(min(candidate, 4000), minimal)
+                # Спрощена формула: шум * коефіцієнт залежно від чутливості
+                # При sensitivity=0.8 → множник ~1.5, при sensitivity=0.5 → множник ~2.0
+                multiplier = 3.0 - (self.sensitivity * 2.0)  # 0.8→1.4, 0.5→2.0, 0.3→2.4
+                adaptive = int(noise * multiplier)
+                # Мінімум 200, максимум 800 для запобігання занадто високих порогів
+                self.vad_threshold = max(min(adaptive, 800), 200)
+                print(f"🔧 Калібровано: шум={int(noise)}, поріг={self.vad_threshold}")
         except Exception:
             # Безпечний фолбек — залишаємо попередній поріг
             pass
@@ -348,7 +345,10 @@ class WakeWordDetector:
             active_chunks = 0
             
             # Виводимо очікування тільки раз на початку циклу
-            print("🎤 Очікування звуку...")
+            print(f"🎤 Очікування звуку (поріг: {self.vad_threshold})...")
+            
+            # Лічильник для періодичного виводу RMS
+            rms_log_counter = 0
             
             while True:
                 try:
@@ -358,9 +358,16 @@ class WakeWordDetector:
                     # Аналізуємо гучність
                     rms = audioop.rms(data, 2)  # 2 bytes per sample (16 bit)
                     
+                    # Періодично виводимо RMS для діагностики (кожні 50 чанків = ~1сек)
+                    rms_log_counter += 1
+                    if rms_log_counter >= 50:
+                        print(f"🔊 RMS: {rms} (поріг: {self.vad_threshold})")
+                        rms_log_counter = 0
+                    
                     # Порівнюємо з порогом
                     if rms > self.vad_threshold:
                         active_chunks += 1
+                        print(f"✓ Звук: RMS={rms} ({active_chunks}/{self.vad_chunks_count})")
                         if active_chunks >= self.vad_chunks_count:
                             print("🎤 Голосову активність виявлено!")
                             return True

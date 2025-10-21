@@ -15,21 +15,45 @@ class NamedBytesIO(BytesIO):
         self.name = name  # деякі SDK очікують атрибут .name
 
 
-def transcribe_audio(telegram_user_id: int, audio_file: str | bytes | BinaryIO) -> str:
-    """Розпізнавання голосу з використанням OpenAI Whisper без запису на диск."""
+def transcribe_audio(telegram_user_id: int, audio_file: str | bytes | BinaryIO, language: str = "uk") -> str:
+    """
+    Розпізнавання голосу з використанням OpenAI Whisper без запису на диск.
+    
+    Args:
+        telegram_user_id: ID користувача Telegram
+        audio_file: Аудіо файл (шлях, bytes або BinaryIO)
+        language: Мова аудіо (uk, en, de) для покращення точності розпізнавання
+    
+    Returns:
+        Розпізнаний текст
+    """
     api_key = api_manager.get_openai_key(telegram_user_id)
     client = OpenAI(api_key=api_key)
 
+    # Whisper API приймає ISO 639-1 коди мов
+    # uk = українська, en = англійська, de = німецька
     if isinstance(audio_file, str):
         with open(audio_file, "rb") as f:
-            response = client.audio.transcriptions.create(model="whisper-1", file=f)
+            response = client.audio.transcriptions.create(
+                model="whisper-1", 
+                file=f,
+                language=language  # Вказуємо мову для точнішого розпізнавання
+            )
     elif isinstance(audio_file, bytes):
         # Обробка in-memory bytes без файлової системи
         buffer = NamedBytesIO(audio_file, name="audio.wav")
-        response = client.audio.transcriptions.create(model="whisper-1", file=buffer)
+        response = client.audio.transcriptions.create(
+            model="whisper-1", 
+            file=buffer,
+            language=language
+        )
     else:
         # BinaryIO (наприклад, вже відкритий файл/буфер)
-        response = client.audio.transcriptions.create(model="whisper-1", file=audio_file)
+        response = client.audio.transcriptions.create(
+            model="whisper-1", 
+            file=audio_file,
+            language=language
+        )
 
     return getattr(response, "text", "")
 
