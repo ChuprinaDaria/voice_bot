@@ -11,7 +11,8 @@ pydub==0.25.1
 numpy>=1.24.0  # Optional for advanced audio processing
 
 # Integrations
-spotipy==2.23.0
+# spotipy==2.23.0  # Замінено на Mopidy
+requests==2.31.0  # Для HTTP запитів до Mopidy
 google-api-python-client==2.108.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0

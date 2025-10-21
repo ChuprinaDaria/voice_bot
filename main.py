@@ -11,7 +11,6 @@ from bot.handlers import (
     settings_handler,
     voice_control_handler,
     openai_key_handler,
-    spotify_code_handler,
     google_code_handler,
     personality_handler,
 )
@@ -90,12 +89,7 @@ def main() -> None:
     )
 
     # Контекстні обробники за станами (після кнопок і OpenAI key)
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND & filters.Regex(r".+"),
-            spotify_code_handler,
-        )
-    )
+    # spotify_code_handler видалено - Mopidy не потребує токенів
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND & filters.Regex(r".+"),

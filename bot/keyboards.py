@@ -54,19 +54,19 @@ def api_keys_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
     if language == "uk":
         keyboard = [
             ["🔑 OpenAI API Key"],
-            ["🎵 Spotify", "📅 Google Calendar"],
+            ["🎵 Музика", "📅 Google Calendar"],
             ["🔙 Назад до налаштувань"]
         ]
     elif language == "de":
         keyboard = [
             ["🔑 OpenAI API Key"],
-            ["🎵 Spotify", "📅 Google Calendar"],
+            ["🎵 Music", "📅 Google Calendar"],
             ["🔙 Zurück zu Einstellungen"]
         ]
     else:  # en
         keyboard = [
             ["🔑 OpenAI API Key"],
-            ["🎵 Spotify", "📅 Google Calendar"],
+            ["🎵 Music", "📅 Google Calendar"],
             ["🔙 Back to Settings"]
         ]
 
