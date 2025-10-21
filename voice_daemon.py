@@ -133,6 +133,21 @@ class VoiceDaemon:
         # Виводимо в лог розпізнаний текст
         print(f"📝 Розпізнано: {command}")
 
+        # Оновлюємо налаштування користувача (мова/особистість) перед обробкою
+        try:
+            db = SessionLocal()
+            user = db.query(User).filter(User.telegram_user_id == self.user_id).first()
+            if user:
+                self.language = user.language
+                self.personality = user.personality_prompt
+        except Exception:
+            pass
+        finally:
+            try:
+                db.close()  # type: ignore[name-defined]
+            except Exception:
+                pass
+
         try:
             # Перевіряємо чи є command_router.py
             try:
