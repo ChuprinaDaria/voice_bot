@@ -97,14 +97,27 @@ class AudioManager:
     
     def _find_usb_microphone(self) -> Optional[int]:
         """Шукає USB мікрофон або будь-який інший робочий мікрофон"""
-        # Спочатку спробуємо знайти USB мікрофон
+        # Пріоритет 1: Шукаємо "USB PnP Sound Device" (основний мікрофон)
         for i, info in enumerate(self.devices):
             try:
                 name = str(info.get('name', '')).lower()
                 max_input_channels = int(info.get('maxInputChannels', 0))
                 
-                # Шукаємо USB в назві і перевіряємо що це INPUT пристрій
-                if 'usb' in name and max_input_channels > 0:
+                # Шукаємо конкретно USB PnP Sound Device (не ReSpeaker!)
+                if 'usb pnp' in name and max_input_channels > 0:
+                    print(f"✅ Знайдено USB PnP мікрофон: {name} (device {i})")
+                    return i
+            except Exception:
+                continue
+        
+        # Пріоритет 2: Будь-який USB (крім seeed/respeaker)
+        for i, info in enumerate(self.devices):
+            try:
+                name = str(info.get('name', '')).lower()
+                max_input_channels = int(info.get('maxInputChannels', 0))
+                
+                # Шукаємо USB в назві, але НЕ ReSpeaker
+                if 'usb' in name and 'seeed' not in name and max_input_channels > 0:
                     print(f"Знайдено USB мікрофон: {name}")
                     return i
             except Exception:
@@ -230,6 +243,7 @@ class AudioManager:
         try:
             # Спочатку перевіряємо чи працює відкриття потоку
             try:
+                print(f"🎙️ Відкриваю запис: device={self.input_device_index}, rate={self.sample_rate}Hz")
                 stream = self.pa.open(
                     format=self.format,
                     channels=self.channels,
@@ -241,7 +255,7 @@ class AudioManager:
             except OSError as e:
                 # Якщо помилка з пристроєм, спробуємо використати дефолтний
                 print(f"⚠️  Помилка відкриття аудіо потоку: {e}")
-                print("Спроба використання дефолтного пристрою...")
+                print("⚠️  УВАГА: Використовую дефолтний пристрій (може бути неправильний мікрофон)...")
                 
                 stream = self.pa.open(
                     format=self.format,
