@@ -9,7 +9,6 @@ from telegram.ext import ContextTypes
 from storage.database import SessionLocal
 from storage.models import ActivationCode, User
 from .keyboards import main_menu_keyboard, setup_menu_keyboard, api_keys_keyboard, language_keyboard, voice_control_keyboard
-from core.i18n import get_text
 from core.state_manager import voice_daemon_manager
 from core.api_manager import api_manager
 from integrations.spotify import spotify_manager
@@ -73,14 +72,14 @@ async def activate_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if activation.is_activated:
-            await message.reply_text("❌ Цей код вже використаний")
+            await message.reply_text("❌ Цей код вже використовується")
             return
 
         activation.is_activated = True
         activation.telegram_user_id = user_id
         activation.activated_at = datetime.utcnow()
 
-        # Якщо мову було вибрано до активації — використаємо її
+        # Якщо мову було вибрано до активації — використовуємо її
         selected_lang = "uk"
         user_data = getattr(context, "user_data", None)
         if isinstance(user_data, dict) and user_data.get("selected_lang") in {"uk", "en"}:
@@ -144,19 +143,19 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Почати розмову (локально на пристрої) — підтримка без емодзі/англ
     normalized = (text or "").strip().lower().replace("🎙️", "").strip()
-    if normalized in ["почати розмову", "start conversation", "gespräch starten"]:
+    if normalized in ["почати розмову", "start conversation"]:
         started = voice_daemon_manager.start_for_user(user_id, listen_immediately=True)
         if started:
-            await message.reply_text(get_text("conversation_started", user.language if user else "uk"))
+            await message.reply_text("✅ Режим розмови запущено на пристрої")
         else:
-            await message.reply_text(get_text("conversation_already_started", user.language if user else "uk"))
+            await message.reply_text("ℹ️ Режим вже запущений")
         db.close()
         return
 
     # Відкрити меню налаштувань
-    if text in [get_text("settings", user.language if user else "uk"), "⚙️ Налаштування", "⚙️ Settings"]:
+    if text in ["⚙️ Налаштування", "⚙️ Settings"]:
         await message.reply_text(
-            get_text("settings_menu", user.language if user else "uk"),
+            "⚙️ Меню налаштувань:" if (user and user.language == "uk") else "⚙️ Settings menu:",
             reply_markup=setup_menu_keyboard(user.language if user else "uk"),
         )
         db.close()
@@ -227,7 +226,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🔑 OpenAI API Key\n\n"
                 "Надішли свій ключ API у форматі:\n"
                 "`sk-proj-xxxxxxxxxxxxx`\n\n"
-                "📚 Де взяти ключ?\n"
+                "📖 Де взяти ключ?\n"
                 "1. Іди на https://platform.openai.com\n"
                 "2. Account → API Keys\n"
                 "3. Create new secret key\n"
@@ -239,7 +238,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🔑 OpenAI API Key\n\n"
                 "Send your API key in format:\n"
                 "`sk-proj-xxxxxxxxxxxxx`\n\n"
-                "📚 Where to get the key?\n"
+                "📖 Where to get the key?\n"
                 "1. Go to https://platform.openai.com\n"
                 "2. Account → API Keys\n"
                 "3. Create new secret key\n"
@@ -319,7 +318,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user.language == "uk":
                 text_msg = (
                     "🎵 Підключення Spotify\n\n"
-                    "📚 Інструкція:\n"
+                    "📖 Інструкція:\n"
                     "1. Натисни на посилання нижче\n"
                     "2. Авторизуйся в Spotify\n"
                     "3. Скопіюй код який отримаєш\n"
@@ -329,7 +328,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 text_msg = (
                     "🎵 Connect Spotify\n\n"
-                    "📚 Instructions:\n"
+                    "📖 Instructions:\n"
                     "1. Click link below\n"
                     "2. Authorize in Spotify\n"
                     "3. Copy the code you receive\n"
@@ -372,7 +371,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user.language == "uk":
                 text_msg = (
                     "📅 Підключення Google Calendar\n\n"
-                    "📚 Інструкція:\n"
+                    "📖 Інструкція:\n"
                     "1. Натисни на посилання\n"
                     "2. Авторизуйся в Google\n"
                     "3. Скопіюй код\n"
@@ -382,7 +381,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 text_msg = (
                     "📅 Connect Google Calendar\n\n"
-                    "📚 Instructions:\n"
+                    "📖 Instructions:\n"
                     "1. Click link\n"
                     "2. Authorize in Google\n"
                     "3. Copy code\n"
@@ -600,6 +599,7 @@ async def google_code_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def personality_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Збереження/редагування промпту особистості з покращеною обробкою помилок"""
     user_data = getattr(context, "user_data", None)
     if not (isinstance(user_data, dict) and user_data.get('awaiting_personality')):
         return
@@ -612,60 +612,109 @@ async def personality_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = tg_user.id
     text = (message.text or "").strip()
 
-    from core.personality import get_personality_prompt, set_personality_prompt
+    print(f"Обробляю personality prompt для користувача {user_id}")
+    print(f"Текст промту: '{text[:30]}...'")
 
     db = SessionLocal()
-    user = db.query(User).filter(User.telegram_user_id == user_id).first()
-    if not user:
-        db.close()
-        return
+    user = None
+    try:
+        user = db.query(User).filter(User.telegram_user_id == user_id).first()
 
-    if text.lower() in ['переглянути', 'view']:
-        current = get_personality_prompt(user_id) or "Не встановлено"
-        await message.reply_text(
-            f"🗣️ Поточний промпт:\n\n`{current}`",
-            parse_mode='Markdown'
-        )
-        db.close()
-        return
+        if not user:
+            await message.reply_text("❌ Помилка: користувача не знайдено в базі даних")
+            return
 
-    if text.lower() in ['скинути', 'reset']:
-        success = set_personality_prompt(user_id, None)
-        response = "✅ Промпт видалено. Бот використовуватиме стандартну поведінку."
-        if not success:
-            response = "❌ Помилка видалення промпту. Спробуйте пізніше."
-        await message.reply_text(response, reply_markup=setup_menu_keyboard(user.language))
+        # Команди
+        if text.lower() in ['переглянути', 'view']:
+            current = user.personality_prompt or "Не встановлено"
+            print(f"Поточний промт користувача: {current[:30]}...")
+            await message.reply_text(
+                f"🗣️ Поточний промпт:\n\n`{current}`",
+                parse_mode='Markdown'
+            )
+            return
+
+        elif text.lower() in ['скинути', 'reset']:
+            try:
+                user.personality_prompt = None
+                db.commit()
+                print("Промт успішно скинуто")
+                await message.reply_text(
+                    "✅ Промпт видалено. Бот використовуватиме стандартну поведінку.",
+                    reply_markup=setup_menu_keyboard(user.language)
+                )
+                user_data['awaiting_personality'] = False
+                return
+            except Exception as e:
+                print(f"❌ Помилка при скиданні промту: {e}")
+                db.rollback()
+                await message.reply_text(
+                    "❌ Помилка при видаленні промпту. Спробуйте ще раз пізніше.",
+                    reply_markup=setup_menu_keyboard(user.language)
+                )
+                user_data['awaiting_personality'] = False
+                return
+
+        # Новий промпт
+        try:
+            # Збережемо промт у 2 етапи з явною перевіркою
+            # 1. Збереження в об'єкті моделі
+            user.personality_prompt = text
+            
+            # 2. Явний commit в БД
+            db.commit()
+            
+            # 3. Перевірка що промт справді зберігся
+            db.refresh(user)
+            saved_prompt = user.personality_prompt
+            
+            if saved_prompt == text:
+                print("✅ Промт успішно збережено")
+                success = True
+            else:
+                print("⚠️ Промт не збережено або збережено неправильно")
+                success = False
+                
+        except Exception as e:
+            print(f"❌ Помилка при збереженні промту: {e}")
+            db.rollback()
+            success = False
+
+        if success:
+            if user.language == "uk":
+                await message.reply_text(
+                    f"✅ Особистість оновлено!\n\n"
+                    f"Новий промпт:\n`{text[:100]}{'...' if len(text) > 100 else ''}`",
+                    parse_mode='Markdown',
+                    reply_markup=setup_menu_keyboard(user.language)
+                )
+            else:
+                await message.reply_text(
+                    f"✅ Personality updated!\n\n"
+                    f"New prompt:\n`{text[:100]}{'...' if len(text) > 100 else ''}`",
+                    parse_mode='Markdown',
+                    reply_markup=setup_menu_keyboard(user.language)
+                )
+        else:
+            if user.language == "uk":
+                await message.reply_text(
+                    "❌ Помилка збереження промпту. Спробуйте скоротити текст або використати лише латинські символи.",
+                    reply_markup=setup_menu_keyboard(user.language)
+                )
+            else:
+                await message.reply_text(
+                    "❌ Failed to save the prompt. Please try shortening the text or using only Latin characters.",
+                    reply_markup=setup_menu_keyboard(user.language)
+                )
+
         user_data['awaiting_personality'] = False
+        
+    except Exception as e:
+        print(f"❌ Неочікувана помилка в personality_handler: {e}")
+        await message.reply_text(
+            "❌ Сталася неочікувана помилка. Спробуйте пізніше.",
+            reply_markup=setup_menu_keyboard(user.language if user else "uk")
+        )
+        user_data['awaiting_personality'] = False
+    finally:
         db.close()
-        return
-
-    success = set_personality_prompt(user_id, text)
-    if success:
-        if user.language == "uk":
-            await message.reply_text(
-                f"✅ Особистість оновлено!\n\n"
-                f"Новий промпт:\n`{text[:100]}{'...' if len(text) > 100 else ''}`",
-                parse_mode='Markdown',
-                reply_markup=setup_menu_keyboard(user.language)
-            )
-        else:
-            await message.reply_text(
-                f"✅ Personality updated!\n\n"
-                f"New prompt:\n`{text[:100]}{'...' if len(text) > 100 else ''}`",
-                parse_mode='Markdown',
-                reply_markup=setup_menu_keyboard(user.language)
-            )
-    else:
-        if user.language == "uk":
-            await message.reply_text(
-                "❌ Помилка збереження промпту. Спробуйте пізніше або скоротіть текст.",
-                reply_markup=setup_menu_keyboard(user.language)
-            )
-        else:
-            await message.reply_text(
-                "❌ Failed to save the prompt. Please try again later or shorten the text.",
-                reply_markup=setup_menu_keyboard(user.language)
-            )
-
-    user_data['awaiting_personality'] = False
-    db.close()
