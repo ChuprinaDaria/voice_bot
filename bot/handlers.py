@@ -118,26 +118,34 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = db.query(User).filter(User.telegram_user_id == user_id).first()
 
     # Спочатку — зміна мови (дозволено навіть до активації)
-    if text in ["Українська (uk)", "English (en)"]:
-        new_lang = "uk" if "Українська" in text else "en"
+    if text in ["Українська (uk)", "English (en)", "Deutsch (de)"]:
+        if "Українська" in text:
+            new_lang = "uk"
+        elif "Deutsch" in text:
+            new_lang = "de"
+        else:
+            new_lang = "en"
         if user:
             user.language = new_lang
             db.commit()
-            await message.reply_text(
-                "✅ Мову змінено" if new_lang == "uk" else "✅ Language updated",
-                reply_markup=setup_menu_keyboard(new_lang),
-            )
+            if new_lang == "uk":
+                confirm_text = "✅ Мову змінено"
+            elif new_lang == "de":
+                confirm_text = "✅ Sprache aktualisiert"
+            else:
+                confirm_text = "✅ Language updated"
+            await message.reply_text(confirm_text, reply_markup=setup_menu_keyboard(new_lang))
         else:
             user_data = getattr(context, "user_data", None)
             if isinstance(user_data, dict):
                 user_data["selected_lang"] = new_lang
-            await message.reply_text(
-                (
-                    "👋 Привіт! Я VoiceBot.\n\nВведи код активації з коробки (формат: VBOT-XXXX-XXXX-XXXX)"
-                    if new_lang == "uk"
-                    else "👋 Hi! I'm VoiceBot.\n\nPlease enter your activation code (format: VBOT-XXXX-XXXX-XXXX)"
-                )
-            )
+            if new_lang == "uk":
+                greet = "👋 Привіт! Я VoiceBot.\n\nВведи код активації з коробки (формат: VBOT-XXXX-XXXX-XXXX)"
+            elif new_lang == "de":
+                greet = "👋 Hallo! Ich bin VoiceBot.\n\nBitte gib deinen Aktivierungscode ein (Format: VBOT-XXXX-XXXX-XXXX)"
+            else:
+                greet = "👋 Hi! I'm VoiceBot.\n\nPlease enter your activation code (format: VBOT-XXXX-XXXX-XXXX)"
+            await message.reply_text(greet)
         db.close()
         return
 
@@ -153,7 +161,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Відкрити меню налаштувань
-    if text in ["⚙️ Налаштування", "⚙️ Settings"]:
+    if text in ["⚙️ Налаштування", "⚙️ Settings", "⚙️ Einstellungen"]:
         await message.reply_text(
             "⚙️ Меню налаштувань:" if (user and user.language == "uk") else "⚙️ Settings menu:",
             reply_markup=setup_menu_keyboard(user.language if user else "uk"),
@@ -191,7 +199,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # API Keys - НОВА КНОПКА
-    if text in ["🔑 API Ключі", "🔑 API Keys"]:
+    if text in ["🔑 API Ключі", "🔑 API Keys", "🔑 API-Schlüsselverwaltung"]:
         # Перевіряємо чи є користувацький ключ
         current_key = api_manager.get_openai_key(user_id)
 
@@ -214,7 +222,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(text_msg, reply_markup=api_keys_keyboard(user.language))
 
     # Вибір мови (кнопка з меню налаштувань)
-    elif text in ["🌐 Вибрати мову", "🌐 Choose Language"]:
+    elif text in ["🌐 Вибрати мову", "🌐 Choose Language", "🌐 Sprache wählen"]:
         await message.reply_text(
             "Оберіть мову / Choose language:", reply_markup=language_keyboard()
         )
@@ -252,7 +260,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data["awaiting_openai_key"] = True
 
     # Керування голосом (меню)
-    elif text in ["🎤 Голосовий режим", "🎤 Voice Control"]:
+    elif text in ["🎤 Голосовий режим", "🎤 Voice Control", "🎤 Sprachsteuerung"]:
         await message.reply_text(
             ("Керування голосом" if user.language == "uk" else "Voice control"),
             reply_markup=voice_control_keyboard(user.language)
@@ -445,14 +453,14 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Назад до налаштувань
-    elif text in ["🔙 Назад до налаштувань", "🔙 Back to Settings"]:
+    elif text in ["🔙 Назад до налаштувань", "🔙 Back to Settings", "🔙 Zurück zu Einstellungen"]:
         await message.reply_text(
             "⚙️ Меню налаштувань:" if user.language == "uk" else "⚙️ Settings menu:",
             reply_markup=setup_menu_keyboard(user.language),
         )
 
     # Завершити налаштування → головне меню
-    elif text in ["✅ Завершити налаштування", "✅ Finish Setup"]:
+    elif text in ["✅ Завершити налаштування", "✅ Finish Setup", "✅ Einrichtung abschließen"]:
         await message.reply_text(
             ("Головне меню" if user.language == "uk" else "Main menu"),
             reply_markup=main_menu_keyboard(),

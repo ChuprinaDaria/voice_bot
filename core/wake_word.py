@@ -47,21 +47,22 @@ class WakeWordDetector:
         self.sample_rate = 16000
         self.chunk_size = 1024
         
+        # Ініціалізуємо аудіо-поля ДО будь-яких операцій із мікрофоном
+        self.audio = None
+        self.stream = None
+        self.is_running = True
+
         # Вибір режиму (для Pi 5 рекомендовано VAD)
         if mode == WakeWordMode.ALWAYS_ON:
             self.mode = mode
-            print(f"🔄 Wake word в режимі ALWAYS_ON (автоматична активація)")
+            print("🔄 Wake word в режимі ALWAYS_ON (автоматична активація)")
         elif mode == WakeWordMode.VAD:
             self.mode = mode
             self._init_vad()
         else:
             # Fallback режим
             self.mode = WakeWordMode.FALLBACK
-            print(f"🔄 Wake word в режимі FALLBACK (натисни Enter)")
-            
-        self.audio = None
-        self.stream = None
-        self.is_running = True
+            print("🔄 Wake word в режимі FALLBACK (натисни Enter)")
     
     def _init_vad(self):
         """Ініціалізація Voice Activity Detection"""
@@ -81,26 +82,56 @@ class WakeWordDetector:
         self._open_microphone()
     
     def _open_microphone(self):
-        """Відкриває мікрофон для запису"""
+        """Відкриває мікрофон для запису з підбором sample rate"""
         try:
             self.audio = pyaudio.PyAudio()
-            
+
             # Знаходимо USB мікрофон
             device_index = self._find_usb_microphone()
-            
-            # Відкриваємо потік
-            self.stream = self.audio.open(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=self.sample_rate,
-                input=True,
-                input_device_index=device_index,
-                frames_per_buffer=self.chunk_size
-            )
-            
-            print(f"✅ Мікрофон відкрито" + 
-                  (f" (device {device_index})" if device_index is not None else ""))
-                  
+
+            # Підбираємо sample rate, якщо поточний не підтримується
+            candidate_rates = []
+            try:
+                if device_index is not None:
+                    info = self.audio.get_device_info_by_index(device_index)
+                    default_rate = int(float(info.get("defaultSampleRate", self.sample_rate)))
+                    candidate_rates.append(default_rate)
+            except Exception:
+                pass
+            # Додаємо стандартні частоти та поточну
+            candidate_rates.extend([self.sample_rate, 48000, 44100, 22050, 16000])
+            # Унікальні, зберігаючи порядок
+            seen = set()
+            candidate_rates = [r for r in candidate_rates if (r not in seen and not seen.add(r))]
+
+            last_error: Optional[Exception] = None
+            for rate in candidate_rates:
+                try:
+                    stream = self.audio.open(
+                        format=pyaudio.paInt16,
+                        channels=1,
+                        rate=rate,
+                        input=True,
+                        input_device_index=device_index,
+                        frames_per_buffer=self.chunk_size,
+                    )
+                    # Успіх: фіксуємо обраний rate і потік
+                    self.sample_rate = rate
+                    self.stream = stream
+                    print(
+                        f"✅ Мікрофон відкрито"
+                        + (f" (device {device_index})" if device_index is not None else "")
+                        + f" @ {rate} Hz"
+                    )
+                    break
+                except Exception as e:
+                    last_error = e
+                    continue
+
+            if self.stream is None:
+                # Не вдалося відкрити жоден режим
+                raise last_error or OSError("Не вдалося відкрити мікрофон ані з одним sample rate")
+
         except Exception as e:
             print(f"⚠️ Помилка при відкритті мікрофона: {e}")
             # Закриваємо все, що вже відкрили
