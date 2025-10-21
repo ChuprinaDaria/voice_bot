@@ -23,23 +23,31 @@ class AudioManager:
         self.channels = 1  # mono
         self.chunk = 1024
         self.format = pyaudio.paInt16
+        self.pa: Optional[pyaudio.PyAudio] = None
+        self.input_device_index: Optional[int] = None
+        self.devices: list = []
         
         # Спочатку перевіримо аудіо систему
         self._prepare_audio_system()
         
-        # Ініціалізація PyAudio
-        self.pa = pyaudio.PyAudio()
-        
-        # Інформація про доступні пристрої
-        self._detect_devices()
-        
-        # Автоматичне визначення USB мікрофона
-        self.input_device_index = self._find_usb_microphone()
-        
-        if self.input_device_index is None:
-            print("⚠️  USB мікрофон не знайдено! Використовую дефолтний пристрій.")
-        else:
-            print(f"✅ USB мікрофон знайдено: device {self.input_device_index}")
+        # Ініціалізація відкладена - створюємо PyAudio тільки коли треба записувати
+    
+    def _ensure_initialized(self):
+        """Ініціалізує PyAudio якщо ще не ініціалізовано"""
+        if self.pa is None:
+            # Ініціалізація PyAudio
+            self.pa = pyaudio.PyAudio()
+            
+            # Інформація про доступні пристрої
+            self._detect_devices()
+            
+            # Автоматичне визначення USB мікрофона
+            self.input_device_index = self._find_usb_microphone()
+            
+            if self.input_device_index is None:
+                print("⚠️  USB мікрофон не знайдено! Використовую дефолтний пристрій.")
+            else:
+                print(f"✅ USB мікрофон знайдено: device {self.input_device_index}")
     
     def _prepare_audio_system(self):
         """Готує аудіо систему - перевіряє наявність alsa.conf і модулів ядра"""
@@ -71,6 +79,8 @@ class AudioManager:
     def _detect_devices(self):
         """Спроба виявити всі аудіо пристрої та зберегти їх інформацію"""
         self.devices = []
+        if self.pa is None:
+            return
         try:
             device_count = self.pa.get_device_count()
             print(f"Знайдено {device_count} аудіо пристроїв.")
@@ -133,8 +143,25 @@ class AudioManager:
             
         print("=" * 60 + "\n")
     
+    def cleanup(self):
+        """Звільняє ресурси PyAudio"""
+        if self.pa is not None:
+            try:
+                self.pa.terminate()
+            except Exception as e:
+                print(f"⚠️  Помилка при закритті PyAudio: {e}")
+            finally:
+                self.pa = None
+    
     def record_audio(self, duration: int = 5) -> bytes:
         """Записує N секунд аудіо з мікрофона"""
+        # Ініціалізуємо PyAudio перед записом
+        self._ensure_initialized()
+        
+        if self.pa is None:
+            print("❌ PyAudio не ініціалізовано")
+            return self._generate_empty_wav(duration)
+        
         print(f"🎤 Запис {duration} секунд...")
         
         try:
@@ -192,6 +219,13 @@ class AudioManager:
             max_duration: Максимальна тривалість запису
         """
         print("🎤 Запис до тиші...")
+        
+        # Ініціалізуємо PyAudio перед записом
+        self._ensure_initialized()
+        
+        if self.pa is None:
+            print("❌ PyAudio не ініціалізовано")
+            return self._generate_empty_wav(max_duration)
         
         try:
             # Спочатку перевіряємо чи працює відкриття потоку
@@ -265,6 +299,13 @@ class AudioManager:
         """Конвертує список фреймів в WAV bytes"""
         buffer = BytesIO()
         
+        # Ініціалізуємо PyAudio якщо потрібно
+        self._ensure_initialized()
+        
+        if self.pa is None:
+            print("❌ PyAudio не ініціалізовано для _frames_to_wav")
+            return b''
+        
         with wave.open(buffer, 'wb') as wf:
             wf.setnchannels(self.channels)
             wf.setsampwidth(self.pa.get_sample_size(self.format))
@@ -281,6 +322,14 @@ class AudioManager:
         """
         if not audio_data:
             print("⚠️  Пусті аудіо дані для відтворення")
+            return
+        
+        # Ініціалізуємо PyAudio якщо потрібно
+        self._ensure_initialized()
+        
+        if self.pa is None:
+            print("⚠️  PyAudio не ініціалізовано, використовую aplay")
+            self._play_with_aplay(audio_data)
             return
             
         try:
@@ -339,12 +388,6 @@ class AudioManager:
         except Exception as e:
             print(f"❌ Помилка відтворення через aplay: {e}")
                 
-    def cleanup(self):
-        """Звільнення ресурсів"""
-        try:
-            self.pa.terminate()
-        except Exception as e:
-            print(f"⚠️  Помилка при звільненні PyAudio: {e}")
 
 
 # Тестовий запуск
