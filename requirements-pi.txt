@@ -10,6 +10,8 @@ python-dotenv==1.0.0
 cryptography==41.0.7
 pydantic>=2.7,<3
 pydantic-settings>=2.2,<3
+httpx==0.25.2
+beautifulsoup4==4.12.2
 
 # Для голосу
 pvporcupine==3.0.0
