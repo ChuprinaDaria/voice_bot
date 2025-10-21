@@ -50,13 +50,25 @@ def setup_menu_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
 
 
 def api_keys_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
-    """Меню керування API ключами"""
+    """Меню керування API ключами та інтеграціями"""
     if language == "uk":
-        keyboard = [["🔑 OpenAI API Key"], ["🔙 Назад до налаштувань"]]
+        keyboard = [
+            ["🔑 OpenAI API Key"],
+            ["🎵 Spotify", "📅 Google Calendar"],
+            ["🔙 Назад до налаштувань"]
+        ]
     elif language == "de":
-        keyboard = [["🔑 OpenAI API Key"], ["🔙 Zurück zu Einstellungen"]]
+        keyboard = [
+            ["🔑 OpenAI API Key"],
+            ["🎵 Spotify", "📅 Google Calendar"],
+            ["🔙 Zurück zu Einstellungen"]
+        ]
     else:  # en
-        keyboard = [["🔑 OpenAI API Key"], ["🔙 Back to Settings"]]
+        keyboard = [
+            ["🔑 OpenAI API Key"],
+            ["🎵 Spotify", "📅 Google Calendar"],
+            ["🔙 Back to Settings"]
+        ]
 
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
