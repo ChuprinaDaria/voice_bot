@@ -11,6 +11,7 @@ import numpy as np
 import threading
 from typing import Optional, Any, List, Callable
 import os
+import subprocess
 import audioop
 from enum import Enum
 
@@ -69,73 +70,128 @@ class WakeWordDetector:
         print(f"🔄 Wake word в режимі VAD (детекція голосу)")
         
         # VAD параметри
-        self.vad_threshold = 1000  # Поріг гучності (коригується залежно від чутливості)
+        self.vad_threshold = 1000  # Базовий поріг гучності (буде автокалібрований)
         self.vad_min_duration = 0.3  # Мінімальна тривалість звуку (секунди)
         
         # Розрахунок кількості чанків для мінімальної тривалості звуку
         self.vad_chunks_count = int(self.vad_min_duration * self.sample_rate / self.chunk_size)
         
-        # Коригуємо поріг залежно від чутливості
-        self.vad_threshold = int(1500 * (1.0 - self.sensitivity) + 500)
-        
+        # Попередньо коригуємо поріг від чутливості (буде уточнено автокалібруванням)
+        base_from_sens = int(1000 * (1.0 - self.sensitivity) + 300)
+        self.vad_threshold = max(self.vad_threshold, base_from_sens)
+
         # Відкриваємо мікрофон
         self._open_microphone()
+
+        # Автокалібрування порогу від реального фонового шуму
+        self._auto_calibrate_threshold()
+        print(f"🔧 VAD: threshold={self.vad_threshold}, min_chunks={self.vad_chunks_count}, sr={self.sample_rate}")
     
     def _open_microphone(self):
-        """Відкриває мікрофон для запису з підбором sample rate"""
-        try:
-            self.audio = pyaudio.PyAudio()
+        """Відкриває мікрофон для запису з підбором sample rate та ретраями."""
+        import time as _t
+        attempts = 3
+        backoff = 0.4
+        last_error: Optional[Exception] = None
 
-            # Знаходимо USB мікрофон
-            device_index = self._find_usb_microphone()
-
-            # Підбираємо sample rate, якщо поточний не підтримується
-            candidate_rates = []
+        for attempt in range(1, attempts + 1):
             try:
-                if device_index is not None:
-                    info = self.audio.get_device_info_by_index(device_index)
-                    default_rate = int(float(info.get("defaultSampleRate", self.sample_rate)))
-                    candidate_rates.append(default_rate)
-            except Exception:
-                pass
-            # Додаємо стандартні частоти та поточну
-            candidate_rates.extend([self.sample_rate, 48000, 44100, 22050, 16000])
-            # Унікальні, зберігаючи порядок
-            seen = set()
-            candidate_rates = [r for r in candidate_rates if (r not in seen and not seen.add(r))]
+                # Завжди створюємо свіжий контекст PyAudio на спробу
+                self._cleanup_audio()
+                self.audio = pyaudio.PyAudio()
 
-            last_error: Optional[Exception] = None
-            for rate in candidate_rates:
+                # Визначаємо індекс пристрою захоплення (USB мікрофон пріоритетно)
+                device_index = self._resolve_preferred_input_device()
+
+                # Кандидати пристрою: спочатку знайдений, потім дефолтний (None)
+                device_candidates: List[Optional[int]] = [device_index, None]
+
+                # Підбираємо sample rate, якщо поточний не підтримується
+                candidate_rates: List[int] = []
                 try:
-                    stream = self.audio.open(
-                        format=pyaudio.paInt16,
-                        channels=1,
-                        rate=rate,
-                        input=True,
-                        input_device_index=device_index,
-                        frames_per_buffer=self.chunk_size,
-                    )
-                    # Успіх: фіксуємо обраний rate і потік
-                    self.sample_rate = rate
-                    self.stream = stream
-                    print(
-                        f"✅ Мікрофон відкрито"
-                        + (f" (device {device_index})" if device_index is not None else "")
-                        + f" @ {rate} Hz"
-                    )
-                    break
-                except Exception as e:
-                    last_error = e
-                    continue
+                    if device_index is not None:
+                        info = self.audio.get_device_info_by_index(device_index)
+                        default_rate = int(float(info.get("defaultSampleRate", self.sample_rate)))
+                        candidate_rates.append(default_rate)
+                except Exception:
+                    pass
+                # Випробовуємо частоти у порядку пріоритету (16k для STT, далі типові)
+                candidate_rates.extend([16000, 44100, 48000, 22050, self.sample_rate])
+                # Унікальні, зберігаючи порядок
+                seen = set()
+                candidate_rates = [r for r in candidate_rates if (r not in seen and not seen.add(r))]
 
-            if self.stream is None:
-                # Не вдалося відкрити жоден режим
-                raise last_error or OSError("Не вдалося відкрити мікрофон ані з одним sample rate")
+                opened = False
+                for dev in device_candidates:
+                    for rate in candidate_rates:
+                        try:
+                            stream = self.audio.open(
+                                format=pyaudio.paInt16,
+                                channels=1,
+                                rate=rate,
+                                input=True,
+                                input_device_index=dev,
+                                frames_per_buffer=self.chunk_size,
+                            )
+                            self.sample_rate = rate
+                            self.stream = stream
+                            print(
+                                "✅ Мікрофон відкрито"
+                                + (f" (device {dev})" if dev is not None else " (default device)")
+                                + f" @ {rate} Hz"
+                            )
+                            opened = True
+                            break
+                        except Exception as e:
+                            last_error = e
+                            continue
+                    if opened:
+                        break
 
-        except Exception as e:
-            print(f"⚠️ Помилка при відкритті мікрофона: {e}")
-            # Закриваємо все, що вже відкрили
-            self._cleanup_audio()
+                if opened:
+                    return
+
+                # Якщо не відкрився — кидати помилку для цього раунду
+                raise last_error or OSError("Не вдалося відкрити мікрофон")
+
+            except Exception as e:
+                print(f"⚠️ Помилка при відкритті мікрофона (спроба {attempt}/{attempts}): {e}")
+                last_error = e
+                # Невеликий бекоф перед повтором
+                _t.sleep(backoff)
+                continue
+
+        # Після всіх спроб — віддати останню помилку та прибрати ресурси
+        self._cleanup_audio()
+        if last_error:
+            print(f"⚠️ Помилка при відкритті мікрофона (остаточно): {last_error}")
+
+    def _auto_calibrate_threshold(self) -> None:
+        """Вимірює фоновий шум і уточнює поріг VAD."""
+        if not self.stream:
+            return
+        try:
+            # Беремо ~0.5 секунди для оцінки шуму
+            measure_seconds = 0.5
+            chunks_to_measure = max(1, int(self.sample_rate * measure_seconds / self.chunk_size))
+            values = []
+            for _ in range(chunks_to_measure):
+                data = self.stream.read(self.chunk_size, exception_on_overflow=False)
+                rms = audioop.rms(data, 2)
+                values.append(rms)
+            if values:
+                noise = sum(values) / len(values)
+                # Порог = шум * коеф. + запас, але не нижче мінімального
+                adaptive = int(noise * 2.5)  # 2.5x над середнім шумом
+                minimal = 250
+                # Врахуємо чутливість (вища чутливість — нижчий поріг)
+                sens_adjust = int(700 * (1.0 - self.sensitivity))
+                candidate = max(adaptive + sens_adjust, minimal)
+                # Не робимо надто високим, щоб не «глухнути»
+                self.vad_threshold = max(min(candidate, 4000), minimal)
+        except Exception:
+            # Безпечний фолбек — залишаємо попередній поріг
+            pass
             
     def _find_usb_microphone(self) -> Optional[int]:
         """Знаходить індекс USB мікрофона"""
@@ -174,6 +230,83 @@ class WakeWordDetector:
             print(f"⚠️ Помилка при пошуку мікрофона: {e}")
             
         return None
+
+    def _resolve_preferred_input_device(self) -> Optional[int]:
+        """Повертає індекс бажаного вхідного пристрою.
+
+        Логіка:
+        1) Якщо задано змінну оточення MIC_ALSA_HW (наприклад, "2,0" або "hw:2,0") —
+           шукаємо PyAudio-пристрій, у якого назва містить відповідний (hw:X,Y).
+        2) Інакше — шукаємо USB мікрофон.
+        3) Якщо не знайдено — None (дефолтний).
+        """
+        if self.audio is None:
+            return None
+        try:
+            hw_hint = os.environ.get("MIC_ALSA_HW")
+            if hw_hint:
+                normalized = hw_hint
+                if "," in normalized and not normalized.startswith("hw:"):
+                    normalized = f"hw:{normalized}"
+                # Пошук збігу у назві PyAudio пристрою
+                for i in range(self.audio.get_device_count()):
+                    try:
+                        info = self.audio.get_device_info_by_index(i)
+                        name = str(info.get('name', '')).lower()
+                        max_in = int(info.get('maxInputChannels', 0))
+                        if max_in > 0 and normalized.lower() in name:
+                            print(f"✅ Обрано пристрій за MIC_ALSA_HW={normalized}: {name}")
+                            return i
+                    except Exception:
+                        continue
+                print(f"⚠️ MIC_ALSA_HW задано ({normalized}), але відповідний пристрій не знайдено")
+
+            # За замовчуванням — USB мікрофон
+            return self._find_usb_microphone()
+        except Exception as e:
+            print(f"⚠️ Помилка визначення пріоритетного пристрою: {e}")
+            return None
+
+    def debug_audio_system(self) -> None:
+        """Виводить базову діагностику аудіосистеми (за наявності утиліт)."""
+        try:
+            print("=== Діагностика аудіо ===")
+            os.system("ps aux | grep -E 'pulse|alsa|audio' | grep -v grep")
+            os.system("ls -la /dev/snd/")
+            os.system("aplay -l")
+            os.system("arecord -l")
+            print("=========================")
+        except Exception:
+            pass
+
+    def record_quick_test(self, hw: str = "plughw:2,0") -> None:
+        """Швидкий запис/відтворення через ALSA утиліти (діагностика поза PyAudio)."""
+        try:
+            subprocess.run(["arecord", "-D", hw, "-f", "S16_LE", "-r", "16000", "-d", "3", "/tmp/test.wav"], check=False)
+            subprocess.run(["aplay", "/tmp/test.wav"], check=False)
+        except Exception as e:
+            print(f"⚠️ arecord/aplay тест не вдався: {e}")
+    
+    def _find_respeaker_device(self) -> Optional[int]:
+        """Знаходить ReSpeaker серед аудіо пристроїв (Seeed/ReSpeaker), з фолбеком на USB."""
+        if self.audio is None:
+            return None
+        try:
+            for i in range(self.audio.get_device_count()):
+                try:
+                    info = self.audio.get_device_info_by_index(i)
+                    name = str(info.get('name', '')).lower()
+                    max_in = int(info.get('maxInputChannels', 0))
+                    if max_in > 0 and ('seeed' in name or 'respeaker' in name):
+                        print(f"✅ ReSpeaker знайдено: {name}")
+                        return i
+                except Exception:
+                    continue
+            # Фолбек
+            return self._find_usb_microphone()
+        except Exception as e:
+            print(f"⚠️ Помилка пошуку ReSpeaker: {e}")
+            return None
         
     def listen(self) -> bool:
         """
