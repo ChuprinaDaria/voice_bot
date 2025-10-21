@@ -78,7 +78,17 @@ class VoiceDaemon:
         print("👂 Слухаю команду...")
         
         # 2. Записуємо аудіо
+        # Звільняємо мікрофон wake-word на час запису
+        try:
+            self.wake_word.pause_listen()
+        except Exception:
+            pass
         audio_data = self.audio.record_until_silence()
+        # Відновлюємо wake-word після запису
+        try:
+            self.wake_word.resume_listen()
+        except Exception:
+            pass
         
         # 3. Розпізнаємо (STT)
         command = transcribe_audio(self.user_id, audio_data)

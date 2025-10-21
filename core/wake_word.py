@@ -307,7 +307,7 @@ class WakeWordDetector:
         except Exception as e:
             print(f"⚠️ Помилка пошуку ReSpeaker: {e}")
             return None
-        
+
     def listen(self) -> bool:
         """
         Слухає wake word
@@ -405,12 +405,21 @@ class WakeWordDetector:
             except Exception:
                 pass
             self.audio = None
-    
+
     def stop(self):
         """Зупиняє детектор і звільняє ресурси"""
         self.is_running = False
         self._cleanup_audio()
         print("🛑 Wake word detector зупинено")
+
+    def pause_listen(self) -> None:
+        """Тимчасово зупиняє прослуховування (звільняє пристрій захоплення)."""
+        self._cleanup_audio()
+
+    def resume_listen(self) -> None:
+        """Відновлює прослуховування після паузи (лише для VAD/ALWAYS_ON)."""
+        if self.mode == WakeWordMode.VAD and self.is_running:
+            self._open_microphone()
 
 
 # Тест
