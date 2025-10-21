@@ -26,10 +26,14 @@ class SpotifyManager:
 
     def get_auth_url(self, telegram_user_id: int) -> str:
         """Генерує URL для авторизації Spotify"""
+        # Якщо немає користувацьких API ключів - використовуємо з .env
+        client_id = self.client_id or get_settings().spotify_client_id
+        client_secret = self.client_secret or get_settings().spotify_client_secret
+        
         # Спрощений варіант: використовуємо localhost redirect
         sp_oauth = SpotifyOAuth(
-            client_id=self.client_id,
-            client_secret=self.client_secret,
+            client_id=client_id,
+            client_secret=client_secret,
             redirect_uri="http://localhost:8888/callback",  # Локальний redirect
             scope=self.scope,
             state=str(telegram_user_id),
@@ -106,10 +110,22 @@ class SpotifyManager:
         finally:
             db.close()
 
+        # Якщо немає користувацьких API ключів - використовуємо з .env
+        client_id = self.client_id
+        client_secret = self.client_secret
+        redirect_uri = self.redirect_uri
+        
+        # Fallback на дефолтні з .env якщо не встановлено користувачем
+        if not client_id or not client_secret:
+            settings = get_settings()
+            client_id = client_id or settings.spotify_client_id
+            client_secret = client_secret or settings.spotify_client_secret
+            redirect_uri = redirect_uri or settings.spotify_redirect_uri
+
         sp_oauth = SpotifyOAuth(
-            client_id=self.client_id,
-            client_secret=self.client_secret,
-            redirect_uri=self.redirect_uri,
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
             scope=self.scope,
         )
 
