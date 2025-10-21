@@ -93,14 +93,10 @@ class VoiceDaemon:
         
         # Коротка пауза перед записом (щоб користувач встиг почати говорити після wake word)
         import time
-        time.sleep(0.2)
+        time.sleep(0.3)
         
-        # Записуємо аудіо з вищим порогом тиші (щоб не обрізати слова)
-        audio_data = self.audio.record_until_silence(
-            silence_threshold=300,  # Нижчий поріг = більше записується
-            silence_duration=2.0,   # Довша тиша перед закінченням
-            max_duration=15         # Довший максимум
-        )
+        # Записуємо через arecord (обходить конфлікт з WakeWordDetector який тримає Device 0)
+        audio_data = self.audio._record_with_arecord(max_duration=10)
         
         # КРИТИЧНО: звільняємо PyAudio ресурси перед відновленням VAD
         try:

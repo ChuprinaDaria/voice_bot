@@ -217,6 +217,47 @@ class AudioManager:
             # Повертаємо пусту WAV
             return self._generate_empty_wav(duration)
     
+    def _record_with_arecord(self, max_duration: int = 15) -> bytes:
+        """Запис через arecord (обходить конфлікти PyAudio)"""
+        import tempfile
+        import subprocess
+        
+        try:
+            # Створюємо тимчасовий файл
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+                temp_file = f.name
+            
+            # Записуємо через arecord
+            print(f"🎙️ Запис через arecord (device hw:2,0, {max_duration}s)...")
+            result = subprocess.run([
+                'arecord',
+                '-D', 'plughw:2,0',  # USB мікрофон
+                '-f', 'S16_LE',      # 16-bit
+                '-c', '1',            # mono
+                '-r', str(self.sample_rate),
+                '-d', str(max_duration),
+                temp_file
+            ], capture_output=True, timeout=max_duration + 5)
+            
+            if result.returncode != 0:
+                print(f"⚠️ arecord помилка: {result.stderr.decode()}")
+                os.unlink(temp_file)
+                return self._generate_empty_wav(max_duration)
+            
+            # Читаємо записане
+            with open(temp_file, 'rb') as f:
+                audio_data = f.read()
+            
+            # Видаляємо тимчасовий файл
+            os.unlink(temp_file)
+            
+            print(f"✅ Записано через arecord")
+            return audio_data
+            
+        except Exception as e:
+            print(f"❌ Помилка arecord: {e}")
+            return self._generate_empty_wav(max_duration)
+    
     def record_until_silence(
         self, 
         silence_threshold: int = 500,
