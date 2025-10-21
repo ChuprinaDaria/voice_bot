@@ -17,7 +17,8 @@ from core.command_router import process_command as route_command
 class VoiceDaemon:
     def __init__(self, telegram_user_id: int):
         self.user_id = telegram_user_id
-        self.wake_word = WakeWordDetector()
+        # Підвищена чутливість VAD для кращого спрацьовування після першої команди
+        self.wake_word = WakeWordDetector(sensitivity=0.8)
         self.audio = AudioManager()
         self.is_running = False
         self.language = "uk"
@@ -93,6 +94,9 @@ class VoiceDaemon:
         # Відновлюємо wake-word після запису
         try:
             self.wake_word.resume_listen()
+            # Невелика пауза для стабілізації ALSA після перевідкриття мікрофона
+            import time as _t
+            _t.sleep(0.2)
         except Exception:
             pass
         
@@ -146,9 +150,6 @@ class VoiceDaemon:
             else:  # en
                 return "Sorry, I didn't hear any command. Please try again."
         
-        # Виводимо в лог розпізнаний текст
-        print(f"📝 Розпізнано: {command}")
-
         # Оновлюємо налаштування користувача (мова/особистість) перед обробкою
         # Жорстко зашитий промпт особистості (відключаємо динамічні зміни через БД)
         BASE_PERSONALITY = (
