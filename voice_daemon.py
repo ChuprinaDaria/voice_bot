@@ -110,8 +110,8 @@ class VoiceDaemon:
         except Exception as e:
             print(f"⚠️  Помилка resume_listen: {e}")
         
-        # 3. Розпізнаємо (STT)
-        command = transcribe_audio(self.user_id, audio_data)
+        # 3. Розпізнаємо (STT) з вказанням мови для точності
+        command = transcribe_audio(self.user_id, audio_data, language=self.language)
         print(f"📝 Розпізнано: {command}")
         
         # 4. Обробляємо команду
@@ -188,7 +188,7 @@ class VoiceDaemon:
         
         # КРОК 1: Отримуємо базову відповідь (факти) від command_router
         base_response = None
-        context_info = ""
+        is_fallback = False
         
         try:
             from core.command_router import process_command as router_process
@@ -197,12 +197,19 @@ class VoiceDaemon:
             # Перевіряємо чи це fallback відповідь
             fallback_keywords = [
                 "не зрозумів", "didn't understand", "nicht verstanden",
-                "не впевнений", "not sure", "nicht sicher"
+                "не впевнений", "not sure", "nicht sicher",
+                "не розпізнав", "didn't recognize", "nicht erkannt"
             ]
             is_fallback = any(keyword in base_response.lower() for keyword in fallback_keywords)
             
+            # Якщо це НЕ fallback (тобто конкретна команда: час, дата, погода)
+            # → повертаємо відповідь БЕЗ OpenAI для швидкості
             if not is_fallback:
-                context_info = f"\n\nФактична інформація: {base_response}"
+                print(f"✓ Router обробив: {base_response[:50]}...")
+                return base_response
+            
+            # Якщо fallback → переходимо до OpenAI
+            print(f"⚠️  Router не розпізнав команду, використовую OpenAI...")
                 
         except ImportError:
             # Якщо модуль не існує - використовуємо базову обробку
@@ -211,6 +218,7 @@ class VoiceDaemon:
             print(f"⚠️  Помилка router: {e}")
         
         # КРОК 2: Пропускаємо через OpenAI з промптом особистості
+        # (тільки для fallback або складних запитів)
         try:
             api_key = api_manager.get_openai_key(self.user_id)
             
@@ -226,13 +234,7 @@ class VoiceDaemon:
                     system_prompt = f"{BASE_PERSONALITY}\n\nAnswer in English briefly (1-2 sentences)."
                 
                 # Формуємо prompt користувача
-                user_prompt = f"Користувач сказав: {command}"
-                
-                if context_info:
-                    user_prompt += context_info
-                    user_prompt += "\n\nВідповідай у своєму стилі, використовуючи цю інформацію."
-                else:
-                    user_prompt += "\n\nВідповідай у своєму стилі."
+                user_prompt = f"Користувач сказав: {command}\n\nВідповідай у своєму стилі."
                 
                 # Викликаємо OpenAI
                 response = client.chat.completions.create(
