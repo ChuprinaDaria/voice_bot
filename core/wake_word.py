@@ -191,9 +191,23 @@ class WakeWordDetector:
             wf.writeframes(b''.join(frames))
             wf.close()
             
-            # Розпізнаємо через Whisper (потрібен user_id - використовуємо 0 для wake word)
-            from voice.stt import transcribe_audio
-            text = transcribe_audio(0, temp_file, language="uk").lower()
+            # Розпізнаємо через Whisper (використовуємо глобальний ключ з .env)
+            from openai import OpenAI
+            from config import settings
+            
+            api_key = settings.openai_api_key
+            if not api_key:
+                print("⚠️  Немає OpenAI ключа для wake word")
+                return True  # Пропускаємо перевірку
+            
+            client = OpenAI(api_key=api_key)
+            with open(temp_file, 'rb') as f:
+                response = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=f,
+                    language="uk"
+                )
+            text = response.text.lower()
             
             # Видаляємо тимчасовий файл
             os.unlink(temp_file)
