@@ -22,6 +22,9 @@ class Settings(BaseSettings):
 
     # OpenAI
     OPENAI_API_KEY: Optional[str] = Field(default=None)
+    
+    # Groq (для швидкої LLM)
+    GROQ_API_KEY: Optional[str] = Field(default=None)
 
     # Spotify
     SPOTIFY_CLIENT_ID: Optional[str] = Field(default=None)
@@ -61,6 +64,10 @@ class Settings(BaseSettings):
     @property
     def openai_api_key(self) -> Optional[str]:
         return self.OPENAI_API_KEY
+    
+    @property
+    def groq_api_key(self) -> Optional[str]:
+        return self.GROQ_API_KEY
 
     @property
     def spotify_client_id(self) -> Optional[str]:
