@@ -218,7 +218,7 @@ class AudioManager:
             silence_duration: Скільки секунд тиші = кінець запису
             max_duration: Максимальна тривалість запису
         """
-        print("🎤 Запис до тиші...")
+        print(f"🎤 Запис до тиші (поріг={silence_threshold}, тиша={silence_duration}s)...")
         
         # Ініціалізуємо PyAudio перед записом
         self._ensure_initialized()
@@ -257,6 +257,7 @@ class AudioManager:
             max_chunks = int(self.sample_rate / self.chunk * max_duration)
             
             start_time = time.time()
+            rms_log_counter = 0
             
             while len(frames) < max_chunks:
                 data = stream.read(self.chunk, exception_on_overflow=False)
@@ -264,6 +265,12 @@ class AudioManager:
                 
                 # Перевіряємо рівень звуку (RMS)
                 rms = audioop.rms(data, 2)  # 2 bytes per sample (paInt16)
+                
+                # Періодично виводимо RMS (кожні 20 чанків)
+                rms_log_counter += 1
+                if rms_log_counter >= 20:
+                    print(f"🎙️ Запис: RMS={rms}, silent={silent_chunks}/{chunks_per_silence}")
+                    rms_log_counter = 0
                 
                 if rms < silence_threshold:
                     silent_chunks += 1

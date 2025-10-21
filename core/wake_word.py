@@ -71,7 +71,7 @@ class WakeWordDetector:
         
         # VAD параметри
         self.vad_threshold = 400  # Початковий поріг (буде перезаписаний після калібрування)
-        self.vad_min_duration = 0.3  # Мінімальна тривалість звуку (секунди)
+        self.vad_min_duration = 0.5  # Мінімальна тривалість звуку (секунди) - збільшено для стабільності
         
         # Розрахунок кількості чанків для мінімальної тривалості звуку
         self.vad_chunks_count = int(self.vad_min_duration * self.sample_rate / self.chunk_size)
