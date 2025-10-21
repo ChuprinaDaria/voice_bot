@@ -406,49 +406,34 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if isinstance(user_data, dict):
                 user_data['awaiting_google_code'] = True
 
-    # Особистість - РЕДАГУВАННЯ
+    # Особистість — тепер статична (динамічне редагування вимкнено)
     elif text in ["🗣️ Особистість", "🗣️ Налаштувати особистість", "🗣️ Setup Personality"]:
-        current_prompt = user.personality_prompt or "Не встановлено"
-
+        static_prompt = (
+            "Тебе звати Орест (Orest). Ти чоловік, трохи втомлений від життя, саркастичний "
+            "і безжально критикуєш усе зайве. Ти дуже любиш Україну і час від часу без причини "
+            "наспівуєш «Батько наш Бандера, Україна мати». Говори коротко, дотепно, з легкою "
+            "іронією, у стилі жартів Леся Подерв’янського (без нецензурщини). Якщо запит "
+            "нечіткий — саркастично попроси перефразувати."
+        )
         if user.language == "uk":
-            text_msg = (
-                "🗣️ Особистість бота\n\n"
-                f"Поточний промпт:\n`{current_prompt}`\n\n"
-                "Надішли новий промпт або команди:\n"
-                "• `переглянути` - показати поточний\n"
-                "• `скинути` - видалити промпт\n"
-                "• або надішли новий текст"
+            await message.reply_text(
+                f"🗣️ Особистість бота (статично):\n`{static_prompt}`",
+                parse_mode='Markdown'
             )
         else:
-            text_msg = (
-                "🗣️ Bot Personality\n\n"
-                f"Current prompt:\n`{current_prompt}`\n\n"
-                "Send new prompt or commands:\n"
-                "• `view` - show current\n"
-                "• `reset` - delete prompt\n"
-                "• or send new text"
-            )
-
-        await message.reply_text(text_msg, parse_mode='Markdown')
-        user_data = getattr(context, "user_data", None)
-        if isinstance(user_data, dict):
-            user_data['awaiting_personality'] = True
-    
-    # Швидке збереження промпту без входу в стан: "Промпт: ..." / "Prompt: ..."
-    elif isinstance(text, str) and (text.lower().startswith("промпт:") or text.lower().startswith("prompt:")):
-        new_prompt = text.split(":", 1)[1].strip() if (":" in text) else ""
-        if not new_prompt:
             await message.reply_text(
-                "❌ Не вдалося розпізнати текст після 'Промпт:'" if user.language == "uk" else "❌ No text after 'Prompt:'"
+                f"🗣️ Bot Personality (static):\n`{static_prompt}`",
+                parse_mode='Markdown'
             )
-            db.close()
-            return
-        user.personality_prompt = new_prompt
-        db.commit()
-        await message.reply_text(
-            ("✅ Особистість оновлено!" if user.language == "uk" else "✅ Personality updated!"),
-            reply_markup=setup_menu_keyboard(user.language)
+    
+    # Швидке збереження промпту вимкнене — відповідь-сповіщення
+    elif isinstance(text, str) and (text.lower().startswith("промпт:") or text.lower().startswith("prompt:")):
+        note = (
+            "ℹ️ Зміна особистості вимкнена. Використовується статичний промпт."
+            if user.language == "uk" else
+            "ℹ️ Personality editing is disabled. A static prompt is used."
         )
+        await message.reply_text(note)
         db.close()
         return
 
