@@ -11,6 +11,7 @@ from voice.stt import transcribe_audio
 from core.tts import text_to_speech
 from storage.database import SessionLocal
 from storage.models import User
+from core.command_router import process_command as route_command
 
 
 class VoiceDaemon:
@@ -110,13 +111,49 @@ class VoiceDaemon:
         """
         Обробляє команду і повертає текстову відповідь
         
-        TODO: Тут буде логіка для:
-        - Spotify ("грай музику")
-        - Calendar ("які зустрічі сьогодні")
-        - Загальні питання (через OpenAI chat)
+        Args:
+            command: Текст команди
+            
+        Returns:
+            Текстова відповідь для озвучування
         """
-        # Поки заглушка
-        return f"Ви сказали: {command}"
+        if not command:
+            # Якщо команда порожня - повідомлення залежно від мови
+            if self.language == "uk":
+                return "Вибачте, я нічого не почув. Спробуйте знову."
+            elif self.language == "de":
+                return "Entschuldigung, ich habe nichts gehört. Bitte versuchen Sie es erneut."
+            else:  # en
+                return "Sorry, I didn't hear anything. Please try again."
+                
+        # Виводимо розпізнаний текст
+        print(f"📝 Розпізнано: {command}")
+        
+        try:
+            # Використовуємо маршрутизатор команд для обробки
+            response = route_command(command, self.language, self.user_id)
+            
+            # Перевіряємо що відповідь не порожня
+            if not response:
+                if self.language == "uk":
+                    response = "Вибачте, я не зміг знайти відповідь на ваше питання."
+                elif self.language == "de":
+                    response = "Es tut mir leid, ich konnte keine Antwort auf Ihre Frage finden."
+                else:  # en
+                    response = "Sorry, I couldn't find an answer to your question."
+                    
+            return response
+            
+        except Exception as e:
+            # У випадку помилки
+            print(f"❌ Помилка при обробці команди: {e}")
+            
+            if self.language == "uk":
+                return "Вибачте, сталася помилка при обробці вашого запиту."
+            elif self.language == "de":
+                return "Entschuldigung, bei der Verarbeitung Ihrer Anfrage ist ein Fehler aufgetreten."
+            else:  # en
+                return "Sorry, an error occurred while processing your request."
         
     def stop(self):
         """Зупиняє daemon"""
