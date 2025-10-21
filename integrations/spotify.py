@@ -26,15 +26,40 @@ class SpotifyManager:
 
     def get_auth_url(self, telegram_user_id: int) -> str:
         """Генерує URL для авторизації Spotify"""
+        # Спрощений варіант: використовуємо localhost redirect
         sp_oauth = SpotifyOAuth(
             client_id=self.client_id,
             client_secret=self.client_secret,
-            redirect_uri=self.redirect_uri,
+            redirect_uri="http://localhost:8888/callback",  # Локальний redirect
             scope=self.scope,
             state=str(telegram_user_id),
-            show_dialog=True,
+            show_dialog=True
         )
         return sp_oauth.get_authorize_url()
+    
+    def set_token_manually(self, telegram_user_id: int, token: str) -> Tuple[bool, str]:
+        """
+        Зберігає токен вручну (для простого налаштування без OAuth сервера)
+        
+        Отримати токен: https://developer.spotify.com/console/post-play/
+        Тицьни "Get Token" → скопіюй access token
+        """
+        try:
+            # Перевіряємо чи токен працює - простий пошук
+            sp = spotipy.Spotify(auth=token)
+            # Тест запит: пошук будь-чого
+            sp.search(q="test", limit=1, type="track")
+            
+            # Зберігаємо токен (як access і refresh, хоча це тимчасовий токен)
+            success = self.save_tokens(telegram_user_id, token, token)
+            
+            if success:
+                return True, "✅ Spotify токен збережено! (дійсний ~1 година)"
+            else:
+                return False, "❌ Не вдалося зберегти токен"
+                
+        except Exception as e:
+            return False, f"❌ Невірний токен: {str(e)}"
 
     def save_tokens(self, telegram_user_id: int, access_token: str, refresh_token: str) -> bool:
         """Зберігає зашифровані токени користувача"""
