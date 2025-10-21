@@ -61,15 +61,29 @@ class APIManager:
             db.close()
 
     def validate_openai_key(self, api_key: str) -> Tuple[bool, str]:
-        """Перевіряє валідність OpenAI ключа"""
+        """Перевіряє валідність OpenAI/Groq ключа"""
         import openai
         from openai import OpenAI
 
         try:
+            # Визначаємо тип ключа
+            is_groq = api_key.startswith("gsk_")
+            
+            if is_groq:
+                # Groq API
+                client = OpenAI(
+                    api_key=api_key,
+                    base_url="https://api.groq.com/openai/v1"
+                )
+                provider = "Groq (швидкий режим ⚡)"
+            else:
+                # Стандартний OpenAI
+                client = OpenAI(api_key=api_key)
+                provider = "OpenAI"
+            
             # Простий тест - список моделей
-            client = OpenAI(api_key=api_key)
             client.models.list()
-            return True, "✅ Ключ валідний!"
+            return True, f"✅ {provider} ключ валідний!"
         except openai.AuthenticationError:
             return False, "❌ Невірний ключ API"
         except Exception as e:  # noqa: BLE001 - повідомляємо користувачу текст помилки
