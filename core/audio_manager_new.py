@@ -36,9 +36,6 @@ class AudioManager:
         """Записує N секунд аудіо з мікрофона"""
         print(f"🎤 Запис {duration} секунд...")
         
-        if self.pa is None:
-            raise RuntimeError("AudioManager не ініціалізований. Викличте __init__ або перезапустіть.")
-        
         stream = self.pa.open(
             format=self.format,
             channels=1,  # Беремо тільки 1 канал з ReSpeaker
@@ -80,9 +77,6 @@ class AudioManager:
     ) -> bytes:
         """Записує поки не буде тиша"""
         print("🎤 Запис до тиші...")
-        
-        if self.pa is None:
-            raise RuntimeError("AudioManager не ініціалізований. Викличте __init__ або перезапустіть.")
         
         stream = self.pa.open(
             format=self.format,
@@ -139,9 +133,6 @@ class AudioManager:
     
     def _bytes_to_wav(self, audio_bytes: bytes) -> bytes:
         """Конвертує raw audio bytes в WAV"""
-        if self.pa is None:
-            raise RuntimeError("AudioManager не ініціалізований. Викличте __init__ або перезапустіть.")
-        
         buffer = BytesIO()
         
         with wave.open(buffer, 'wb') as wf:
