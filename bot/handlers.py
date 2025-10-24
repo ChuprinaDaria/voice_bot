@@ -770,6 +770,31 @@ async def personality_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         db.close()
 
 
+async def send_voice_response(user_id: int, message, text: str, lang: str = "uk"):
+    """Відправляє голосову відповідь через динамік або в чат"""
+    if voice_daemon_manager.is_running(user_id):
+        # Говоримо через динамік
+        try:
+            from core.tts import text_to_speech
+            from core.audio_manager import AudioManager
+            
+            # Генеруємо TTS
+            audio_response = text_to_speech(user_id, text, lang, voice="onyx")
+            
+            # Відтворюємо через динамік
+            audio_manager = AudioManager()
+            audio_manager.play_audio(audio_response)
+            audio_manager.cleanup()
+            
+            # Відправляємо коротке підтвердження в чат
+            await message.reply_text("🔊")
+        except Exception as e:
+            print(f"⚠️  Помилка TTS: {e}")
+            await message.reply_text(text)
+    else:
+        # Відправляємо в чат як зазвичай
+        await message.reply_text(text)
+
 async def music_control_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробник керування музикою"""
     tg_user = update.effective_user
@@ -840,22 +865,22 @@ async def music_control_handler(update: Update, context: ContextTypes.DEFAULT_TY
         # Пауза
         if text in ["⏸️ Пауза", "⏸️ Pause"]:
             success, msg = mopidy_manager.pause()
-            await message.reply_text(msg)
+            await send_voice_response(user_id, message, msg, lang)
             
         # Продовжити
         elif text in ["▶️ Продовжити", "▶️ Fortsetzen", "▶️ Resume"]:
             success, msg = mopidy_manager.resume()
-            await message.reply_text(msg)
+            await send_voice_response(user_id, message, msg, lang)
             
         # Наступна
         elif text in ["⏭️ Наступна", "⏭️ Nächste", "⏭️ Next"]:
             success, msg = mopidy_manager.next_track()
-            await message.reply_text(msg)
+            await send_voice_response(user_id, message, msg, lang)
             
         # Попередня
         elif text in ["⏮️ Попередня", "⏮️ Vorherige", "⏮️ Previous"]:
             success, msg = mopidy_manager.previous_track()
-            await message.reply_text(msg)
+            await send_voice_response(user_id, message, msg, lang)
             
         # Зупинити з дотепним коментарем
         elif text in ["⏹️ Зупинити музику", "⏹️ Musik stoppen", "⏹️ Stop Music"]:
@@ -864,11 +889,11 @@ async def music_control_handler(update: Update, context: ContextTypes.DEFAULT_TY
             # Дотепні коментарі
             if lang == "uk":
                 comments = [
-                    "⏹️ Зупинено! Нарешті тиша... 😌",
-                    "⏹️ Музика зупинена. Мої вушка відпочивають! 🎧",
-                    "⏹️ Тишаaa... Можна почути як думки літають 🦋",
-                    "⏹️ Зупинено! Час для серйозних справ 🧐",
-                    "⏹️ Музика OFF. Тепер я тут головний! 😎"
+                    "Зупинено! Нарешті тиша...",
+                    "Музика зупинена. Мої вушка відпочивають!",
+                    "Тиша... Можна почути як думки літають",
+                    "Зупинено! Час для серйозних справ",
+                    "Музика OFF. Тепер я тут головний!"
                 ]
             elif lang == "de":
                 comments = [
@@ -888,7 +913,9 @@ async def music_control_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 ]
             
             funny_msg = random.choice(comments)
-            await message.reply_text(funny_msg)
+            
+            # Відправляємо дотепний коментар
+            await send_voice_response(user_id, message, funny_msg, lang)
             
             # Сповіщаємо голосового бота що може слухати
             try:

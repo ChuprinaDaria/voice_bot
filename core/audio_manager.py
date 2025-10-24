@@ -238,25 +238,23 @@ class AudioManager:
             # Визначаємо формат
             if audio_data[:4] == b'RIFF':
                 audio = AudioSegment.from_wav(BytesIO(audio_data))
-                print("   Формат: WAV")
             else:
                 audio = AudioSegment.from_mp3(BytesIO(audio_data))
-                print("   Формат: MP3")
             
+            print(f"   Формат: {'WAV' if audio_data[:4] == b'RIFF' else 'MP3'}")
             print(f"   Оригінал: {audio.channels}ch, {audio.frame_rate}Hz, {audio.sample_width*8}bit")
             
-            # RESAMPLE до підтримуваного rate (44100 або 48000)
-            target_rate = 48000  # ReSpeaker зазвичай підтримує 48kHz
+            # RESAMPLE до підтримуваного rate
+            target_rate = 48000
             if audio.frame_rate != target_rate:
                 print(f"   🔄 Resampling {audio.frame_rate}Hz → {target_rate}Hz")
                 audio = audio.set_frame_rate(target_rate)
             
-            # Конвертуємо mono → stereo якщо треба
+            # Конвертуємо mono → stereo
             if audio.channels == 1:
                 print(f"   🔄 Конвертую mono → stereo")
                 audio = audio.set_channels(2)
             
-            # Конвертуємо в RAW
             raw_data = audio.raw_data
             sample_width = audio.sample_width
             channels = audio.channels
@@ -264,25 +262,46 @@ class AudioManager:
             
             print(f"   ✅ Фінальні параметри: {channels}ch, {frame_rate}Hz, {sample_width*8}bit")
             
-            # Відтворюємо
+            # ВАЖЛИВО: chunk size для 48kHz stereo
+            # 1024 frames * 2 channels * 2 bytes = 4096 bytes
+            chunk_frames = 1024
+            chunk_bytes = chunk_frames * channels * sample_width
+            
+            print(f"   📦 Chunk size: {chunk_frames} frames = {chunk_bytes} bytes")
+            
+            # Відкриваємо stream з правильними параметрами
             stream = self.pa.open(
                 format=self.pa.get_format_from_width(sample_width),
                 channels=channels,
                 rate=frame_rate,
                 output=True,
-                output_device_index=self.output_device_index
+                output_device_index=self.output_device_index,
+                frames_per_buffer=chunk_frames  # ВАЖЛИВО!
             )
             
+            print(f"   ▶️ Відтворюю {len(raw_data)} bytes...")
+            
             # Пишемо по чанках
-            chunk_size = self.chunk * sample_width * channels
-            for i in range(0, len(raw_data), chunk_size):
-                chunk = raw_data[i:i + chunk_size]
+            bytes_written = 0
+            for i in range(0, len(raw_data), chunk_bytes):
+                chunk = raw_data[i:i + chunk_bytes]
                 stream.write(chunk)
+                bytes_written += len(chunk)
+                
+                # Прогрес кожні 10%
+                progress = (bytes_written / len(raw_data)) * 100
+                if progress % 10 < 0.1:  # грубо кожні 10%
+                    print(f"   📊 {progress:.0f}%", end='\r')
+            
+            print(f"\n   ✅ Відтворено {bytes_written} bytes")
+            
+            # Чекаємо поки все відтвориться
+            import time
+            time.sleep(0.1)
             
             stream.stop_stream()
             stream.close()
-            print("✅ Відтворення завершено")
-                    
+            
         except Exception as e:
             print(f"❌ Помилка відтворення: {e}")
             import traceback
