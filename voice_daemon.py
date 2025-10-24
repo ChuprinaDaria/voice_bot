@@ -1,8 +1,29 @@
+#!/usr/bin/env python3
 """
 Daemon який запускається на Raspberry Pi
 Слухає wake word → записує команду → розпізнає → виконує → відповідає
 """
 
+# Вимикаємо ALSA warnings
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "1"
+
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# Redirect ALSA errors to /dev/null
+from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
+ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+def py_error_handler(filename, line, function, err, fmt):
+    pass
+c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+try:
+    asound = cdll.LoadLibrary('libasound.so.2')
+    asound.snd_lib_error_set_handler(c_error_handler)
+except:
+    pass
+
+# Тепер імпорти решти
 import time
 from core.wake_word import WakeWordDetector
 from hardware.led_controller import led_controller
@@ -95,10 +116,10 @@ class VoiceDaemon:
         import time
         time.sleep(0.3)
         
-        # Записуємо аудіо (до тиші або макс 10 сек)
+        # КРИТИЧНО: Знижуємо поріг тиші до 150 (у тебе шум=84)
         audio_data = self.audio.record_until_silence(
-            silence_threshold=500,
-            silence_duration=1.5,
+            silence_threshold=150,  # ← БУЛО 500, СТАЛО 150
+            silence_duration=1.0,    # ← БУЛО 1.5, СТАЛО 1.0
             max_duration=10
         )
         
