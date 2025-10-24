@@ -39,6 +39,21 @@ class AudioManager:
         print(f"✅ OUTPUT: ReSpeaker (device {self.output_device_index})")
         print(f"✅ Whisper sample rate: {self.sample_rate}Hz")
         
+        # Ініціалізуємо pygame.mixer для відтворення
+        try:
+            import pygame
+            if not pygame.mixer.get_init():
+                print(f"🎮 Ініціалізую pygame.mixer...")
+                pygame.mixer.init(
+                    frequency=44100,
+                    size=-16,      # 16-bit signed
+                    channels=2,    # stereo
+                    buffer=2048    # buffer size
+                )
+                print(f"✅ pygame.mixer готовий")
+        except Exception as e:
+            print(f"⚠️  Помилка ініціалізації pygame: {e}")
+        
         # Дебаг output device
         self.debug_output_device()
     
@@ -224,12 +239,13 @@ class AudioManager:
         return buffer.getvalue()
     
     def play_audio(self, audio_data: bytes) -> None:
-        """Відтворює аудіо через simpleaudio (найстабільніше на Pi)"""
+        """Відтворює аудіо через pygame.mixer (найстабільніше на Pi)"""
         print(f"🔊 Відтворення {len(audio_data)} bytes...")
         
         try:
             from pydub import AudioSegment
-            import simpleaudio as sa
+            import pygame
+            from io import BytesIO
             
             # Визначаємо формат
             if audio_data[:4] == b'RIFF':
@@ -240,8 +256,7 @@ class AudioManager:
             print(f"   Формат: {'WAV' if audio_data[:4] == b'RIFF' else 'MP3'}")
             print(f"   Оригінал: {audio.channels}ch, {audio.frame_rate}Hz")
             
-            # Конвертуємо до підтримуваного формату
-            # simpleaudio любить 44100 Hz, 16-bit, stereo
+            # Конвертуємо до 44100Hz stereo (що підтримує ReSpeaker)
             if audio.frame_rate != 44100:
                 print(f"   🔄 Resampling {audio.frame_rate}Hz → 44100Hz")
                 audio = audio.set_frame_rate(44100)
@@ -250,23 +265,22 @@ class AudioManager:
                 print(f"   🔄 Конвертую mono → stereo")
                 audio = audio.set_channels(2)
             
-            if audio.sample_width != 2:  # 16-bit
-                print(f"   🔄 Конвертую до 16-bit")
-                audio = audio.set_sample_width(2)
+            print(f"   ✅ Параметри: {audio.channels}ch, {audio.frame_rate}Hz")
             
-            print(f"   ✅ Параметри: {audio.channels}ch, {audio.frame_rate}Hz, 16bit")
+            # Експортуємо як WAV в пам'ять
+            wav_buffer = BytesIO()
+            audio.export(wav_buffer, format='wav')
+            wav_buffer.seek(0)
+            
             print(f"   ▶️ Відтворюю...")
             
-            # Відтворюємо через simpleaudio
-            play_obj = sa.play_buffer(
-                audio.raw_data,
-                num_channels=audio.channels,
-                bytes_per_sample=audio.sample_width,
-                sample_rate=audio.frame_rate
-            )
+            # Завантажуємо і відтворюємо
+            sound = pygame.mixer.Sound(wav_buffer)
+            channel = sound.play()
             
             # Чекаємо завершення
-            play_obj.wait_done()
+            while channel.get_busy():
+                pygame.time.wait(100)  # чекаємо 100ms між перевірками
             
             print(f"   ✅ Відтворено")
             
@@ -293,6 +307,14 @@ class AudioManager:
 
     def cleanup(self):
         """Звільняє ресурси"""
-        if self.pa:
+        if hasattr(self, 'pa') and self.pa:
             self.pa.terminate()
             self.pa = None
+        
+        # Закриваємо pygame якщо використовували
+        try:
+            import pygame
+            if pygame.mixer.get_init():
+                pygame.mixer.quit()
+        except:
+            pass
