@@ -8,14 +8,20 @@ def main_menu_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
     if language == "uk":
         buttons = [
             [KeyboardButton(text="🎙️ Почати розмову"), KeyboardButton(text="⚙️ Налаштування")],
+            [KeyboardButton(text="🎵 Керування музикою"), KeyboardButton(text="⏰ Таймер")],
+            [KeyboardButton(text="📜 Історія"), KeyboardButton(text="🎲 Розважити мене")],
         ]
     elif language == "de":
         buttons = [
             [KeyboardButton(text="🎙️ Gespräch starten"), KeyboardButton(text="⚙️ Einstellungen")],
+            [KeyboardButton(text="🎵 Musiksteuerung"), KeyboardButton(text="⏰ Timer")],
+            [KeyboardButton(text="📜 Verlauf"), KeyboardButton(text="🎲 Unterhaltung")],
         ]
     else:  # en
         buttons = [
             [KeyboardButton(text="🎙️ Start conversation"), KeyboardButton(text="⚙️ Settings")],
+            [KeyboardButton(text="🎵 Music Control"), KeyboardButton(text="⏰ Timer")],
+            [KeyboardButton(text="📜 History"), KeyboardButton(text="🎲 Entertain me")],
         ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
@@ -98,5 +104,31 @@ def voice_control_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
         keyboard = [
             ["🎤 Enable Voice", "🔇 Disable Voice"],
             ["🔙 Back to Settings"]
+        ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+def music_control_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
+    """Кнопки керування музикою"""
+    if language == "uk":
+        keyboard = [
+            ["⏸️ Пауза", "▶️ Продовжити"],
+            ["⏭️ Наступна", "⏮️ Попередня"],
+            ["⏹️ Зупинити музику"],
+            ["🔙 Назад"]
+        ]
+    elif language == "de":
+        keyboard = [
+            ["⏸️ Pause", "▶️ Fortsetzen"],
+            ["⏭️ Nächste", "⏮️ Vorherige"],
+            ["⏹️ Musik stoppen"],
+            ["🔙 Zurück"]
+        ]
+    else:  # en
+        keyboard = [
+            ["⏸️ Pause", "▶️ Resume"],
+            ["⏭️ Next", "⏮️ Previous"],
+            ["⏹️ Stop Music"],
+            ["🔙 Back"]
         ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)

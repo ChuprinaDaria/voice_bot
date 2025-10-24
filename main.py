@@ -13,6 +13,10 @@ from bot.handlers import (
     openai_key_handler,
     google_code_handler,
     personality_handler,
+    music_control_handler,
+    timer_handler,
+    history_handler,
+    fun_handler,
 )
 from config import get_settings
 from storage.database import init_db
@@ -48,6 +52,46 @@ def main() -> None:
         MessageHandler(
             filters.Regex(r"^(🎤 Увімкнути голос|🔇 Вимкнути голос|🎤 Enable Voice|🔇 Disable Voice|🎤 Stimme aktivieren|🔇 Stimme deaktivieren)$"),
             voice_control_handler,
+        )
+    )
+    
+    # Обробка кнопок керування музикою - високий пріоритет
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(🎵 Керування музикою|🎵 Musiksteuerung|🎵 Music Control|⏸️ Пауза|⏸️ Pause|▶️ Продовжити|▶️ Fortsetzen|▶️ Resume|⏭️ Наступна|⏭️ Nächste|⏭️ Next|⏮️ Попередня|⏮️ Vorherige|⏮️ Previous|⏹️ Зупинити музику|⏹️ Musik stoppen|⏹️ Stop Music|🔙 Назад|🔙 Zurück|🔙 Back)$"),
+            music_control_handler,
+        )
+    )
+    
+    # Обробка кнопок таймерів - високий пріоритет
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(⏰ Таймер|⏰ Timer)$"),
+            timer_handler,
+        )
+    )
+    
+    # Обробка введення часу для таймера (тільки числа)
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^\d+$") & ~filters.COMMAND,
+            timer_handler,
+        )
+    )
+    
+    # Обробка кнопок історії
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(📜 Історія|📜 Verlauf|📜 History)$"),
+            history_handler,
+        )
+    )
+    
+    # Обробка кнопок розваг
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(🎲 Розважити мене|🎲 Unterhaltung|🎲 Entertain me)$"),
+            fun_handler,
         )
     )
 

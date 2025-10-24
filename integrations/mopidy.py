@@ -100,11 +100,14 @@ class MopidyManager:
             return False, "❌ Mopidy не запущений. Запусти: sudo systemctl start mopidy"
 
         # Шукаємо трек
+        print(f"🔍 Шукаю: '{track_name}' (джерело: {source})")
         tracks = self.search(track_name, source)
         
         if not tracks:
             return False, f"❌ Трек '{track_name}' не знайдено"
 
+        print(f"✅ Знайдено {len(tracks)} треків")
+        
         # Беремо перший результат
         track = tracks[0]
         track_uri = track.get("uri")
@@ -119,10 +122,15 @@ class MopidyManager:
         add_result = self._rpc_call("core.tracklist.add", {"uris": [track_uri]})
         
         if not add_result:
+            print(f"❌ Не вдалося додати трек: {track_uri}")
             return False, "❌ Не вдалося додати трек до плейлиста"
+
+        print(f"✅ Трек додано до плейлиста: {track_uri}")
 
         # Відтворюємо
         play_result = self._rpc_call("core.playback.play")
+        
+        print(f"🎵 Play result: {play_result}")
         
         if play_result is None:
             return False, "❌ Не вдалося запустити відтворення"
@@ -172,6 +180,11 @@ class MopidyManager:
     def get_current_track(self) -> Optional[Dict[str, Any]]:
         """Отримує інформацію про поточний трек"""
         return self._rpc_call("core.playback.get_current_track")
+    
+    def get_playback_state(self) -> Optional[str]:
+        """Отримує стан відтворення (playing/paused/stopped)"""
+        result = self._rpc_call("core.playback.get_state")
+        return str(result) if result else None
 
     def set_volume(self, volume: int) -> Tuple[bool, str]:
         """
