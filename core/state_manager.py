@@ -70,6 +70,36 @@ class VoiceDaemonManager:
         with self._lock:
             thread = self._user_id_to_thread.get(telegram_user_id)
             return bool(thread and thread.is_alive())
+    
+    def pause_for_user(self, telegram_user_id: int) -> bool:
+        """Призупиняє прослуховування для користувача (daemon залишається запущеним)."""
+        with self._lock:
+            daemon = self._user_id_to_daemon.get(telegram_user_id)
+        
+        if not daemon:
+            return False
+        
+        try:
+            daemon.pause_listening()
+            return True
+        except Exception as e:
+            print(f"⚠️  Помилка паузи для користувача {telegram_user_id}: {e}")
+            return False
+    
+    def resume_for_user(self, telegram_user_id: int) -> bool:
+        """Відновлює прослуховування для користувача."""
+        with self._lock:
+            daemon = self._user_id_to_daemon.get(telegram_user_id)
+        
+        if not daemon:
+            return False
+        
+        try:
+            daemon.resume_listening()
+            return True
+        except Exception as e:
+            print(f"⚠️  Помилка відновлення для користувача {telegram_user_id}: {e}")
+            return False
 
 
 # Глобальний менеджер

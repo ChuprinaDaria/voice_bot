@@ -104,6 +104,9 @@ class AudioManager:
         
         start_time = time.time()
         
+        speech_detected = False
+        speech_chunks = 0
+        
         while len(frames) < max_chunks:
             data = stream.read(self.chunk, exception_on_overflow=False)
             frames.append(data)
@@ -111,21 +114,34 @@ class AudioManager:
             # Перевіряємо рівень звуку
             rms = audioop.rms(data, 2)
             
-            # ДОДАЙ ЦЕ - показуємо RMS кожні 20 chunks
-            if len(frames) % 20 == 0:
+            # Показуємо RMS кожні 10 chunks для кращої діагностики
+            if len(frames) % 10 == 0:
                 print(f"  📊 RMS: {rms}, Тиша: {silent_chunks}/{chunks_per_silence}, Поріг: {silence_threshold}")
             
-            if rms < silence_threshold:
-                silent_chunks += 1
-            else:
+            # Якщо RMS вище порогу - це мова
+            if rms >= silence_threshold:
+                speech_detected = True
+                speech_chunks += 1
                 silent_chunks = 0
-                
-            if silent_chunks > chunks_per_silence:
-                print(f"🔇 Тиша {silence_duration}s detected.")
-                break
+                print(f"  🗣️ Мова детектована! RMS: {rms}")
+            else:
+                # Якщо мова вже була детектована, рахуємо тишу
+                if speech_detected:
+                    silent_chunks += 1
+                    if silent_chunks > chunks_per_silence:
+                        print(f"🔇 Тиша {silence_duration}s після мови detected.")
+                        break
+                else:
+                    # Якщо мова ще не почалася, скидаємо лічильник тиші
+                    silent_chunks = 0
                 
         elapsed = time.time() - start_time
-        print(f"✅ Записано {elapsed:.1f}s")
+        
+        # Перевіряємо чи була детектована мова
+        if not speech_detected:
+            print(f"⚠️  Мова не детектована за {elapsed:.1f}s (максимум {max_duration}s)")
+        else:
+            print(f"✅ Записано {elapsed:.1f}s (мова детектована)")
         
         # Отримуємо останній RMS значення
         last_rms = 0
@@ -135,7 +151,7 @@ class AudioManager:
             except:
                 last_rms = 0
         
-        print(f"  📊 Підсумок: {len(frames)} chunks, останній RMS: {last_rms}")
+        print(f"  📊 Підсумок: {len(frames)} chunks, мова: {speech_detected}, останній RMS: {last_rms}")
         
         stream.stop_stream()
         stream.close()
@@ -171,7 +187,7 @@ class AudioManager:
         return buffer.getvalue()
     
     def play_audio(self, audio_data: bytes) -> None:
-        """Відтворює аудіо через ReSpeaker (device 1)"""
+        """Відтворює аудіо (WAV або MP3)"""
         print(f"🔊 Відтворення {len(audio_data)} bytes...")
         
         if self.pa is None:
@@ -180,42 +196,52 @@ class AudioManager:
             return
         
         try:
-            buffer = BytesIO(audio_data)
+            from pydub import AudioSegment
             
-            with wave.open(buffer, 'rb') as wf:
-                channels = wf.getnchannels()
-                sample_width = wf.getsampwidth()
-                framerate = wf.getframerate()
-                
-                print(f"   Формат: {channels}ch, {framerate}Hz, {sample_width*8}bit")
-                
-                # Читаємо всі фрейми
-                audio_frames = wf.readframes(wf.getnframes())
-                
-                # Конвертуємо mono → stereo для ReSpeaker (якщо треба)
-                if channels == 1:
-                    audio_frames = audioop.tostereo(audio_frames, sample_width, 1, 1)
-                    channels = 2
-                    print("   Конвертовано mono → stereo")
-                
-                # Відкриваємо stream для ReSpeaker
-                stream = self.pa.open(
-                    format=self.pa.get_format_from_width(sample_width),
-                    channels=channels,
-                    rate=framerate,
-                    output=True,
-                    output_device_index=self.output_device_index
-                )
-                
-                # Відтворюємо по chunks
-                chunk_size = self.chunk * channels * sample_width
-                for i in range(0, len(audio_frames), chunk_size):
-                    chunk = audio_frames[i:i+chunk_size]
-                    stream.write(chunk)
-                
-                stream.stop_stream()
-                stream.close()
-                print("✅ Відтворення завершено")
+            # Визначаємо формат
+            if audio_data[:4] == b'RIFF':
+                # Це WAV
+                audio = AudioSegment.from_wav(BytesIO(audio_data))
+                print("   Формат: WAV")
+            else:
+                # Це MP3
+                audio = AudioSegment.from_mp3(BytesIO(audio_data))
+                print("   Формат: MP3")
+            
+            # Конвертуємо в RAW для PyAudio
+            raw_data = audio.raw_data
+            sample_width = audio.sample_width
+            channels = audio.channels
+            frame_rate = audio.frame_rate
+            
+            print(f"   Параметри: {channels}ch, {frame_rate}Hz, {sample_width*8}bit")
+            
+            # Конвертуємо mono → stereo для ReSpeaker (якщо треба)
+            if channels == 1:
+                # Використовуємо pydub для конвертації
+                audio = audio.set_channels(2)
+                raw_data = audio.raw_data
+                channels = 2
+                print("   Конвертовано mono → stereo")
+            
+            # Відтворюємо
+            stream = self.pa.open(
+                format=self.pa.get_format_from_width(sample_width),
+                channels=channels,
+                rate=frame_rate,
+                output=True,
+                output_device_index=self.output_device_index
+            )
+            
+            # Пишемо по чанках
+            chunk_size = self.chunk * sample_width * channels
+            for i in range(0, len(raw_data), chunk_size):
+                chunk = raw_data[i:i + chunk_size]
+                stream.write(chunk)
+            
+            stream.stop_stream()
+            stream.close()
+            print("✅ Відтворення завершено")
                     
         except Exception as e:
             print(f"❌ Помилка відтворення: {e}")

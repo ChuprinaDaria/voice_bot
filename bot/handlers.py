@@ -488,9 +488,8 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Голосове керування
     elif text in ["🎤 Увімкнути голос", "🎤 Enable Voice", "🎤 Stimme aktivieren",
-                  "🔇 Вимкнути голос", "🔇 Disable Voice", "🔇 Stimme deaktivieren",
-                  "⏸️ Призупинити", "⏸️ Pause", "⏸️ Pausieren",
-                  "▶️ Продовжити", "▶️ Resume", "▶️ Fortsetzen"]:
+                  "🔇 Заглушити мікрофон", "🔇 Mute Microphone", "🔇 Mikrofon stumm",
+                  "▶️ Відновити прослуховування", "▶️ Resume Listening", "▶️ Zuhören fortsetzen"]:
         db.close()
         await voice_control_handler(update, context)
         return
@@ -515,26 +514,25 @@ async def voice_control_handler(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             await message.reply_text("ℹ️ Голосовий режим вже працює")
         
-    elif text in ["🔇 Вимкнути голос", "🔇 Disable Voice", "🔇 Stimme deaktivieren"]:
-        stopped = voice_daemon_manager.stop_for_user(user_id)
-        if stopped:
-            await message.reply_text("🔇 Голосовий режим вимкнено")
-        else:
-            await message.reply_text("ℹ️ Голосовий режим вже вимкнений")
-    
-    elif text in ["⏸️ Призупинити", "⏸️ Pause", "⏸️ Pausieren"]:
-        # Пауза прослуховування (daemon залишається запущеним)
+    elif text in ["🔇 Заглушити мікрофон", "🔇 Mute Microphone", "🔇 Mikrofon stumm"]:
+        # Призупиняємо прослуховування (daemon залишається запущеним)
         if voice_daemon_manager.is_running(user_id):
-            # Тут можна додати логіку паузи, якщо потрібно
-            await message.reply_text("⏸️ Прослуховування призупинено")
+            paused = voice_daemon_manager.pause_for_user(user_id)
+            if paused:
+                await message.reply_text("🔇 Мікрофон заглушено (daemon працює)")
+            else:
+                await message.reply_text("ℹ️ Помилка заглушення")
         else:
             await message.reply_text("ℹ️ Голосовий режим не запущений")
     
-    elif text in ["▶️ Продовжити", "▶️ Resume", "▶️ Fortsetzen"]:
+    elif text in ["▶️ Відновити прослуховування", "▶️ Resume Listening", "▶️ Zuhören fortsetzen"]:
         # Відновлення прослуховування
         if voice_daemon_manager.is_running(user_id):
-            # Тут можна додати логіку відновлення, якщо потрібно
-            await message.reply_text("▶️ Прослуховування відновлено")
+            resumed = voice_daemon_manager.resume_for_user(user_id)
+            if resumed:
+                await message.reply_text("▶️ Прослуховування відновлено")
+            else:
+                await message.reply_text("ℹ️ Помилка відновлення")
         else:
             await message.reply_text("ℹ️ Спочатку увімкніть голосовий режим")
 
