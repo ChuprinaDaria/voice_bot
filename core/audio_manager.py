@@ -39,23 +39,28 @@ class AudioManager:
         print(f"✅ OUTPUT: ReSpeaker (device {self.output_device_index})")
         print(f"✅ Whisper sample rate: {self.sample_rate}Hz")
         
-        # Ініціалізуємо pygame.mixer для відтворення
+        # DEBUG output device ПЕРЕД pygame
+        self.debug_output_device()
+        
+        # Ініціалізуємо pygame.mixer (після дебагу!)
+        self._init_pygame_mixer()
+    
+    def _init_pygame_mixer(self):
+        """Ініціалізує pygame.mixer для відтворення"""
         try:
             import pygame
+            
             if not pygame.mixer.get_init():
                 print(f"🎮 Ініціалізую pygame.mixer...")
                 pygame.mixer.init(
                     frequency=44100,
-                    size=-16,      # 16-bit signed
-                    channels=2,    # stereo
-                    buffer=2048    # buffer size
+                    size=-16,
+                    channels=2,
+                    buffer=2048
                 )
                 print(f"✅ pygame.mixer готовий")
         except Exception as e:
-            print(f"⚠️  Помилка ініціалізації pygame: {e}")
-        
-        # Дебаг output device
-        self.debug_output_device()
+            print(f"⚠️  pygame.mixer не ініціалізовано: {e}")
     
     def debug_output_device(self):
         """Показує параметри output пристрою"""
