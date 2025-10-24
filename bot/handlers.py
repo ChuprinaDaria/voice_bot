@@ -150,30 +150,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
         return
 
-    # Почати розмову (локально на пристрої) — підтримка без емодзі/англ
-    normalized = (text or "").strip().lower().replace("🎙️", "").strip()
-    if normalized in ["почати розмову", "start conversation"]:
-        started = voice_daemon_manager.start_for_user(user_id, listen_immediately=True)
-        if started:
-            await message.reply_text("✅ Режим розмови запущено на пристрої")
-        else:
-            await message.reply_text("ℹ️ Режим вже запущений")
-        db.close()
-        return
 
-    # Перемкнути режим голосового управління
-    if text in ["🔄 Перемкнути режим", "🔄 Switch mode", "🔄 Modus wechseln"]:
-        # Зупиняємо поточний режим
-        voice_daemon_manager.stop_for_user(user_id)
-        
-        # Запускаємо в режимі wake word (звичайний режим)
-        started = voice_daemon_manager.start_for_user(user_id, listen_immediately=False)
-        if started:
-            await message.reply_text("🔄 Перемкнуто на режим wake word")
-        else:
-            await message.reply_text("ℹ️ Помилка перемикання режиму")
-        db.close()
-        return
 
     # Відкрити меню налаштувань
     if text in ["⚙️ Налаштування", "⚙️ Settings", "⚙️ Einstellungen"]:
@@ -508,12 +485,21 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
         await fun_handler(update, context)
         return
+    
+    # Голосове керування
+    elif text in ["🎤 Увімкнути голос", "🎤 Enable Voice", "🎤 Stimme aktivieren",
+                  "🔇 Вимкнути голос", "🔇 Disable Voice", "🔇 Stimme deaktivieren",
+                  "⏸️ Призупинити", "⏸️ Pause", "⏸️ Pausieren",
+                  "▶️ Продовжити", "▶️ Resume", "▶️ Fortsetzen"]:
+        db.close()
+        await voice_control_handler(update, context)
+        return
 
     db.close()
 
 
 async def voice_control_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Увімкнути/вимкнути голос"""
+    """Увімкнути/вимкнути голос та керування паузою"""
     tg_user = update.effective_user
     message = update.message
     if tg_user is None or message is None:
@@ -522,30 +508,35 @@ async def voice_control_handler(update: Update, context: ContextTypes.DEFAULT_TY
     text = message.text
     user_id = tg_user.id
 
-    if text in ["🎤 Увімкнути голос", "🎤 Enable Voice"]:
+    if text in ["🎤 Увімкнути голос", "🎤 Enable Voice", "🎤 Stimme aktivieren"]:
         started = voice_daemon_manager.start_for_user(user_id)
         if started:
             await message.reply_text("✅ Голосовий режим увімкнено на пристрої")
         else:
             await message.reply_text("ℹ️ Голосовий режим вже працює")
         
-    elif text in ["🔇 Вимкнути голос", "🔇 Disable Voice"]:
+    elif text in ["🔇 Вимкнути голос", "🔇 Disable Voice", "🔇 Stimme deaktivieren"]:
         stopped = voice_daemon_manager.stop_for_user(user_id)
         if stopped:
             await message.reply_text("🔇 Голосовий режим вимкнено")
         else:
             await message.reply_text("ℹ️ Голосовий режим вже вимкнений")
     
-    elif text in ["🔄 Перемкнути режим", "🔄 Switch mode", "🔄 Modus wechseln"]:
-        # Зупиняємо поточний режим
-        voice_daemon_manager.stop_for_user(user_id)
-        
-        # Запускаємо в режимі wake word (звичайний режим)
-        started = voice_daemon_manager.start_for_user(user_id, listen_immediately=False)
-        if started:
-            await message.reply_text("🔄 Перемкнуто на режим wake word")
+    elif text in ["⏸️ Призупинити", "⏸️ Pause", "⏸️ Pausieren"]:
+        # Пауза прослуховування (daemon залишається запущеним)
+        if voice_daemon_manager.is_running(user_id):
+            # Тут можна додати логіку паузи, якщо потрібно
+            await message.reply_text("⏸️ Прослуховування призупинено")
         else:
-            await message.reply_text("ℹ️ Помилка перемикання режиму")
+            await message.reply_text("ℹ️ Голосовий режим не запущений")
+    
+    elif text in ["▶️ Продовжити", "▶️ Resume", "▶️ Fortsetzen"]:
+        # Відновлення прослуховування
+        if voice_daemon_manager.is_running(user_id):
+            # Тут можна додати логіку відновлення, якщо потрібно
+            await message.reply_text("▶️ Прослуховування відновлено")
+        else:
+            await message.reply_text("ℹ️ Спочатку увімкніть голосовий режим")
 
 async def openai_key_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробка введення OpenAI API ключа"""

@@ -118,9 +118,13 @@ class VoiceDaemon:
         import time
         time.sleep(0.3)
         
-        # ФІКСОВАНИЙ ЧАС - 5 секунд
-        audio_data = self.audio.record_audio(duration=5)
-        print("✅ Запис завершено (5 сек)")
+        # Запис до тиші (більш природно)
+        audio_data = self.audio.record_until_silence(
+            silence_threshold=500,
+            silence_duration=1.5,  # 1.5 сек тиші = кінець
+            max_duration=10        # максимум 10 сек
+        )
+        print("✅ Запис завершено")
         
         # КРИТИЧНО: звільняємо PyAudio ресурси перед відновленням VAD
         try:
