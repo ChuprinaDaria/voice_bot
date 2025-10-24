@@ -7,24 +7,24 @@ def main_menu_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
     """Головне меню"""
     if language == "uk":
         buttons = [
-            [KeyboardButton(text="🎙️ Почати розмову"), KeyboardButton(text="⚙️ Налаштування")],
+            [KeyboardButton(text="⚙️ Налаштування")],
             [KeyboardButton(text="🎵 Керування музикою"), KeyboardButton(text="⏰ Таймер")],
             [KeyboardButton(text="📜 Історія"), KeyboardButton(text="🎲 Розважити мене")],
-            [KeyboardButton(text="🔄 Перемкнути режим"), KeyboardButton(text="🎤 Увімкнути голос")],
+            [KeyboardButton(text="🎤 Увімкнути голос"), KeyboardButton(text="🔇 Вимкнути голос")],
         ]
     elif language == "de":
         buttons = [
-            [KeyboardButton(text="🎙️ Gespräch starten"), KeyboardButton(text="⚙️ Einstellungen")],
+            [KeyboardButton(text="⚙️ Einstellungen")],
             [KeyboardButton(text="🎵 Musiksteuerung"), KeyboardButton(text="⏰ Timer")],
             [KeyboardButton(text="📜 Verlauf"), KeyboardButton(text="🎲 Unterhaltung")],
-            [KeyboardButton(text="🔄 Modus wechseln"), KeyboardButton(text="🎤 Stimme aktivieren")],
+            [KeyboardButton(text="🎤 Stimme aktivieren"), KeyboardButton(text="🔇 Stimme deaktivieren")],
         ]
     else:  # en
         buttons = [
-            [KeyboardButton(text="🎙️ Start conversation"), KeyboardButton(text="⚙️ Settings")],
+            [KeyboardButton(text="⚙️ Settings")],
             [KeyboardButton(text="🎵 Music Control"), KeyboardButton(text="⏰ Timer")],
             [KeyboardButton(text="📜 History"), KeyboardButton(text="🎲 Entertain me")],
-            [KeyboardButton(text="🔄 Switch mode"), KeyboardButton(text="🎤 Enable Voice")],
+            [KeyboardButton(text="🎤 Enable Voice"), KeyboardButton(text="🔇 Disable Voice")],
         ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
@@ -96,16 +96,19 @@ def voice_control_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
     if language == "uk":
         keyboard = [
             ["🎤 Увімкнути голос", "🔇 Вимкнути голос"],
+            ["⏸️ Призупинити", "▶️ Продовжити"],
             ["🔙 Назад до налаштувань"]
         ]
     elif language == "de":
         keyboard = [
             ["🎤 Stimme aktivieren", "🔇 Stimme deaktivieren"],
+            ["⏸️ Pausieren", "▶️ Fortsetzen"],
             ["🔙 Zurück zu Einstellungen"]
         ]
     else:  # en
         keyboard = [
             ["🎤 Enable Voice", "🔇 Disable Voice"],
+            ["⏸️ Pause", "▶️ Resume"],
             ["🔙 Back to Settings"]
         ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
