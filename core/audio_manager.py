@@ -10,6 +10,8 @@ import wave
 import audioop
 from io import BytesIO
 import time
+import subprocess
+import os
 
 
 class AudioManager:
@@ -152,6 +154,77 @@ class AudioManager:
             
         return buffer.getvalue()
     
+    def play_audio(self, audio_data: bytes) -> None:
+        """
+        Відтворює аудіо через 3.5mm вихід
+        Підтримує WAV і MP3 (через pydub)
+        Додано кращу обробку помилок
+        """
+        if not audio_data:
+            print("⚠️  Пусті аудіо дані для відтворення")
+            return
+        
+        if self.pa is None:
+            print("⚠️  PyAudio не ініціалізовано, використовую aplay")
+            self._play_with_aplay(audio_data)
+            return
+            
+        try:
+            # Спроба відтворити як WAV
+            buffer = BytesIO(audio_data)
+            
+            with wave.open(buffer, 'rb') as wf:
+                try:
+                    stream = self.pa.open(
+                        format=self.pa.get_format_from_width(wf.getsampwidth()),
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True
+                    )
+                    
+                    # Читаємо і відтворюємо по чанках
+                    data = wf.readframes(self.chunk)
+                    while data:
+                        stream.write(data)
+                        data = wf.readframes(self.chunk)
+                        
+                    stream.stop_stream()
+                    stream.close()
+                except Exception as e:
+                    print(f"⚠️  Помилка при відтворенні WAV: {e}")
+                    # Спробуємо використати системний aplay як fallback
+                    self._play_with_aplay(audio_data)
+                
+        except wave.Error:
+            # Якщо не WAV - пробуємо через pydub (MP3)
+            try:
+                from pydub import AudioSegment  # type: ignore[import-not-found]
+                from pydub.playback import play  # type: ignore[import-not-found]
+                
+                audio = AudioSegment.from_file(BytesIO(audio_data))
+                play(audio)
+                
+            except Exception as e:
+                print(f"❌ Помилка відтворення: {e}")
+                # Спробуємо використати системний aplay як fallback
+                self._play_with_aplay(audio_data)
+    
+    def _play_with_aplay(self, audio_data: bytes) -> None:
+        """Використовує aplay для відтворення аудіо як fallback"""
+        try:
+            # Зберігаємо аудіо у тимчасовий файл
+            tmp_file = "/tmp/audio_fallback.wav"
+            with open(tmp_file, 'wb') as f:
+                f.write(audio_data)
+                
+            # Відтворюємо через aplay
+            subprocess.run(["aplay", tmp_file], check=False)
+            
+            # Видаляємо тимчасовий файл
+            os.unlink(tmp_file)
+        except Exception as e:
+            print(f"❌ Помилка відтворення через aplay: {e}")
+
     def cleanup(self):
         """Звільняє ресурси"""
         if self.pa:
