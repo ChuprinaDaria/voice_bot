@@ -32,17 +32,17 @@ class AudioManager:
         self.input_device_index = 0
         self.device_rate = 44100  # USB мікрофон працює на 44100
         
-        # OUTPUT: ReSpeaker (device 1) - 2 канали для стерео
-        self.output_device_index = 1
+        # OUTPUT: ReSpeaker - шукаємо hw:3,0
+        self.output_device_index = self._find_respeaker()
         
         print(f"✅ INPUT: USB мікрофон (device {self.input_device_index}) @ {self.device_rate}Hz")
-        print(f"✅ OUTPUT: ReSpeaker (device {self.output_device_index})")
+        if self.output_device_index is not None:
+            print(f"✅ OUTPUT: ReSpeaker (device {self.output_device_index})")
+        else:
+            print(f"⚠️  OUTPUT: ReSpeaker не знайдено")
         print(f"✅ Whisper sample rate: {self.sample_rate}Hz")
         
-        # DEBUG output device ПЕРЕД pygame
-        self.debug_output_device()
-        
-        # Ініціалізуємо pygame.mixer (після дебагу!)
+        # Ініціалізуємо pygame.mixer
         self._init_pygame_mixer()
     
     def _init_pygame_mixer(self):
@@ -61,6 +61,26 @@ class AudioManager:
                 print(f"✅ pygame.mixer готовий")
         except Exception as e:
             print(f"⚠️  pygame.mixer не ініціалізовано: {e}")
+    
+    def _find_respeaker(self) -> Optional[int]:
+        """Шукає ReSpeaker hw:3,0"""
+        if self.pa is None:
+            print("⚠️  PyAudio не ініціалізований")
+            return None
+            
+        for i in range(self.pa.get_device_count()):
+            info = self.pa.get_device_info_by_index(i)
+            name = str(info.get('name', ''))
+            
+            # Шукаємо hw:3,0 напряму
+            if 'hw:3,0' in name:
+                max_output = int(info.get('maxOutputChannels', 0))
+                if max_output > 0:
+                    print(f"✅ Знайдено ReSpeaker: {name}")
+                    return i
+        
+        print("⚠️  hw:3,0 не знайдено!")
+        return None
     
     def debug_output_device(self):
         """Показує параметри output пристрою"""
