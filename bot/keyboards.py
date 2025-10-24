@@ -95,20 +95,20 @@ def voice_control_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
     """Кнопки керування голосом"""
     if language == "uk":
         keyboard = [
-            ["🎤 Увімкнути голос", "🔇 Вимкнути голос"],
-            ["⏸️ Призупинити", "▶️ Продовжити"],
+            ["🎤 Увімкнути голос", "🔇 Заглушити мікрофон"],
+            ["▶️ Відновити прослуховування"],
             ["🔙 Назад до налаштувань"]
         ]
     elif language == "de":
         keyboard = [
-            ["🎤 Stimme aktivieren", "🔇 Stimme deaktivieren"],
-            ["⏸️ Pausieren", "▶️ Fortsetzen"],
+            ["🎤 Stimme aktivieren", "🔇 Mikrofon stumm"],
+            ["▶️ Zuhören fortsetzen"],
             ["🔙 Zurück zu Einstellungen"]
         ]
     else:  # en
         keyboard = [
-            ["🎤 Enable Voice", "🔇 Disable Voice"],
-            ["⏸️ Pause", "▶️ Resume"],
+            ["🎤 Enable Voice", "🔇 Mute Microphone"],
+            ["▶️ Resume Listening"],
             ["🔙 Back to Settings"]
         ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)

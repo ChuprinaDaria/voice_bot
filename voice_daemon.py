@@ -42,6 +42,7 @@ class VoiceDaemon:
         self.wake_word = WakeWordDetector(sensitivity=0.8)
         self.audio = AudioManager()
         self.is_running = False
+        self.is_paused = False  # Новий стан паузи
         self.language = "uk"
         self.personality = None
         
@@ -60,6 +61,24 @@ class VoiceDaemon:
             self.personality = user.personality_prompt
             return True
         return False
+    
+    def pause_listening(self):
+        """Призупиняє прослуховування (daemon залишається запущеним)"""
+        self.is_paused = True
+        try:
+            self.wake_word.pause_listen()
+        except Exception as e:
+            print(f"⚠️  Помилка паузи wake word: {e}")
+        print("⏸️  Прослуховування призупинено")
+    
+    def resume_listening(self):
+        """Відновлює прослуховування"""
+        self.is_paused = False
+        try:
+            self.wake_word.resume_listen()
+        except Exception as e:
+            print(f"⚠️  Помилка відновлення wake word: {e}")
+        print("▶️  Прослуховування відновлено")
         
     def start(self, listen_immediately: bool = False):
         """Запускає daemon
@@ -78,6 +97,11 @@ class VoiceDaemon:
             print("🎙️ Режим постійного прослуховування активовано")
         
         while self.is_running:
+            # Якщо призупинено - просто чекаємо
+            if self.is_paused:
+                time.sleep(0.1)
+                continue
+                
             if listen_immediately:
                 # Режим постійного прослуховування - одразу обробляємо команду
                 try:
@@ -120,9 +144,9 @@ class VoiceDaemon:
         
         # Запис до тиші (більш природно)
         audio_data = self.audio.record_until_silence(
-            silence_threshold=500,
-            silence_duration=1.5,  # 1.5 сек тиші = кінець
-            max_duration=10        # максимум 10 сек
+            silence_threshold=200,  # Зменшено з 500 до 200
+            silence_duration=1.5,   # 1.5 сек тиші = кінець
+            max_duration=10         # максимум 10 сек
         )
         print("✅ Запис завершено")
         
