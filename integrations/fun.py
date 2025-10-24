@@ -45,10 +45,7 @@ class FunManager:
         Args:
             language: uk, en, de
         """
-        if language == "uk":
-            joke = random.choice(self.ukrainian_jokes)
-            return True, f"😄 {joke}"
-        
+        # Спочатку намагаємося отримати з API (для всіх мов)
         try:
             response = requests.get(self.joke_api, timeout=5)
             response.raise_for_status()
@@ -61,6 +58,7 @@ class FunManager:
                 
         except Exception as e:
             print(f"⚠️ Joke API error: {e}")
+            # Fallback на локальні жарти
             if language == "uk":
                 joke = random.choice(self.ukrainian_jokes)
                 return True, f"😄 {joke}"
@@ -76,10 +74,7 @@ class FunManager:
         Args:
             language: uk, en, de
         """
-        if language == "uk":
-            fact = random.choice(self.ukrainian_facts)
-            return True, fact
-        
+        # Спочатку намагаємося отримати з API (для всіх мов)
         try:
             response = requests.get(self.fact_api, timeout=5)
             response.raise_for_status()
@@ -99,6 +94,7 @@ class FunManager:
                 
         except Exception as e:
             print(f"⚠️ Fact API error: {e}")
+            # Fallback на локальні факти
             if language == "uk":
                 fact = random.choice(self.ukrainian_facts)
                 return True, fact
