@@ -50,7 +50,7 @@ def main() -> None:
     # Обробка кнопок керування голосом - високий пріоритет
     app.add_handler(
         MessageHandler(
-            filters.Regex(r"^(🎤 Увімкнути голос|🔇 Вимкнути голос|🎤 Enable Voice|🔇 Disable Voice|🎤 Stimme aktivieren|🔇 Stimme deaktivieren)$"),
+            filters.Regex(r"^(🎤 Увімкнути голос|🔇 Вимкнути голос|🎤 Enable Voice|🔇 Disable Voice|🎤 Stimme aktivieren|🔇 Stimme deaktivieren|🔄 Перемкнути режим|🔄 Switch mode|🔄 Modus wechseln)$"),
             voice_control_handler,
         )
     )

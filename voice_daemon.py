@@ -65,7 +65,7 @@ class VoiceDaemon:
         """Запускає daemon
 
         Args:
-            listen_immediately: Якщо True — одразу записати команду без wake word
+            listen_immediately: Якщо True — постійно слухати команди без wake word
         """
         if not self.load_user_settings():
             print("❌ Користувач не знайдений")
@@ -74,25 +74,27 @@ class VoiceDaemon:
         self.is_running = True
         print(f"✅ Daemon запущено (мова: {self.language})")
         
+        if listen_immediately:
+            print("🎙️ Режим постійного прослуховування активовано")
+        
         while self.is_running:
-            # Якщо потрібно одразу слухати — один раз виконуємо команду
             if listen_immediately:
+                # Режим постійного прослуховування - одразу обробляємо команду
                 try:
                     led_controller.start_listening()
                 except Exception:
                     pass
                 self.handle_command()
-                listen_immediately = False
-                continue
-
-            # Звичайний режим: чекаємо wake word
-            if self.wake_word.listen():
-                print("🎤 Wake word detected!")
-                try:
-                    led_controller.start_listening()
-                except Exception:
-                    pass
-                self.handle_command()
+                # Не змінюємо listen_immediately - продовжуємо слухати
+            else:
+                # Звичайний режим: чекаємо wake word
+                if self.wake_word.listen():
+                    print("🎤 Wake word detected!")
+                    try:
+                        led_controller.start_listening()
+                    except Exception:
+                        pass
+                    self.handle_command()
                 
     def handle_command(self):
         """Обробляє голосову команду"""
@@ -116,12 +118,9 @@ class VoiceDaemon:
         import time
         time.sleep(0.3)
         
-        # КРИТИЧНО: Знижуємо поріг тиші до 150 (у тебе шум=84)
-        audio_data = self.audio.record_until_silence(
-            silence_threshold=150,  # ← БУЛО 500, СТАЛО 150
-            silence_duration=1.0,    # ← БУЛО 1.5, СТАЛО 1.0
-            max_duration=10
-        )
+        # ФІКСОВАНИЙ ЧАС - 5 секунд
+        audio_data = self.audio.record_audio(duration=5)
+        print("✅ Запис завершено (5 сек)")
         
         # КРИТИЧНО: звільняємо PyAudio ресурси перед відновленням VAD
         try:
