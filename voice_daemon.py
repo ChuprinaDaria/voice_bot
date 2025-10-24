@@ -132,6 +132,12 @@ class VoiceDaemon:
         import time as _t
         _t.sleep(0.3)
         
+        # Переініціалізуємо AudioManager для відтворення
+        try:
+            self.audio = AudioManager()
+        except Exception as e:
+            print(f"⚠️  Помилка переініціалізації AudioManager: {e}")
+        
         # Відновлюємо wake-word після запису
         try:
             self.wake_word.resume_listen()
@@ -156,15 +162,22 @@ class VoiceDaemon:
             self.language,
             voice="onyx"  # Глибокий чоловічий голос
         )
+        
+        # 6. Відтворюємо через ІСНУЮЧИЙ self.audio
+        print("🔊 Відтворюю відповідь...")
         try:
             led_controller.start_speaking()
         except Exception:
             pass
+        
+        # Використовуємо існуючий self.audio (НЕ створюємо новий AudioManager)
         self.audio.play_audio(audio_response)
+        
         try:
             led_controller.blink_success()
         except Exception:
             pass
+        print("✅ Відповідь відтворена")
         
     def process_command(self, command: str) -> str:
         """
