@@ -171,80 +171,56 @@ class AudioManager:
         return buffer.getvalue()
     
     def play_audio(self, audio_data: bytes) -> None:
-        """
-        Відтворює аудіо через ReSpeaker (device 1)
-        Підтримує WAV і MP3 (через pydub)
-        """
-        if not audio_data:
-            print("⚠️  Пусті аудіо дані для відтворення")
-            return
+        """Відтворює аудіо через ReSpeaker (device 1)"""
+        print(f"🔊 Відтворення {len(audio_data)} bytes...")
         
         if self.pa is None:
             print("⚠️  PyAudio не ініціалізовано, використовую aplay")
             self._play_with_aplay(audio_data)
             return
-            
+        
         try:
-            # Спроба відтворити як WAV
             buffer = BytesIO(audio_data)
             
             with wave.open(buffer, 'rb') as wf:
-                # ReSpeaker має 2 канали - конвертуємо mono → stereo якщо треба
                 channels = wf.getnchannels()
+                sample_width = wf.getsampwidth()
+                framerate = wf.getframerate()
+                
+                print(f"   Формат: {channels}ch, {framerate}Hz, {sample_width*8}bit")
+                
+                # Читаємо всі фрейми
+                audio_frames = wf.readframes(wf.getnframes())
+                
+                # Конвертуємо mono → stereo для ReSpeaker (якщо треба)
                 if channels == 1:
-                    # Читаємо mono audio
-                    mono_data = wf.readframes(wf.getnframes())
-                    
-                    # Дублюємо канал для стерео (L=R)
-                    import audioop
-                    stereo_data = audioop.tostereo(mono_data, 2, 1, 1)
-                    
-                    # Відкриваємо stream для ReSpeaker (2 канали)
-                    stream = self.pa.open(
-                        format=self.pa.get_format_from_width(wf.getsampwidth()),
-                        channels=2,  # ReSpeaker стерео
-                        rate=wf.getframerate(),
-                        output=True,
-                        output_device_index=self.output_device_index
-                    )
-                    
-                    # Відтворюємо
-                    chunk_size = self.chunk * 2  # *2 бо стерео
-                    for i in range(0, len(stereo_data), chunk_size):
-                        stream.write(stereo_data[i:i+chunk_size])
-                        
-                else:
-                    # Якщо вже стерео - просто грай
-                    stream = self.pa.open(
-                        format=self.pa.get_format_from_width(wf.getsampwidth()),
-                        channels=channels,
-                        rate=wf.getframerate(),
-                        output=True,
-                        output_device_index=self.output_device_index
-                    )
-                    
-                    data = wf.readframes(self.chunk)
-                    while data:
-                        stream.write(data)
-                        data = wf.readframes(self.chunk)
-                        
+                    audio_frames = audioop.tostereo(audio_frames, sample_width, 1, 1)
+                    channels = 2
+                    print("   Конвертовано mono → stereo")
+                
+                # Відкриваємо stream для ReSpeaker
+                stream = self.pa.open(
+                    format=self.pa.get_format_from_width(sample_width),
+                    channels=channels,
+                    rate=framerate,
+                    output=True,
+                    output_device_index=self.output_device_index
+                )
+                
+                # Відтворюємо по chunks
+                chunk_size = self.chunk * channels * sample_width
+                for i in range(0, len(audio_frames), chunk_size):
+                    chunk = audio_frames[i:i+chunk_size]
+                    stream.write(chunk)
+                
                 stream.stop_stream()
                 stream.close()
-                print("✅ Аудіо відтворено")
+                print("✅ Відтворення завершено")
                     
-        except wave.Error:
-            # Якщо не WAV - пробуємо через pydub (MP3)
-            try:
-                from pydub import AudioSegment  # type: ignore[import-not-found]
-                from pydub.playback import play  # type: ignore[import-not-found]
-                
-                audio = AudioSegment.from_file(BytesIO(audio_data))
-                play(audio)
-                
-            except Exception as e:
-                print(f"❌ Помилка відтворення: {e}")
         except Exception as e:
             print(f"❌ Помилка відтворення: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _play_with_aplay(self, audio_data: bytes) -> None:
         """Використовує aplay для відтворення аудіо як fallback"""
