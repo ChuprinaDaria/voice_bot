@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Google
     GOOGLE_CREDENTIALS_PATH: str = Field(default=str(PROJECT_ROOT / "secrets" / "client_secret_763674966520-mm4jf3km7du4k23h6s963bh6qaak7qfv.apps.googleusercontent.com.json"))
     GOOGLE_REDIRECT_URI: Optional[str] = Field(default="https://voicebot.lazysoft.pl/google/callback")
+    
+    # OpenWeatherMap (для погоди)
+    OPENWEATHER_API_KEY: Optional[str] = Field(default=None)
 
     # Domain & Redirects
     DOMAIN: str = Field(default="voicebot.lazysoft.pl")
@@ -124,6 +127,10 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         return self.DATABASE_URL
+    
+    @property
+    def openweather_api_key(self) -> Optional[str]:
+        return self.OPENWEATHER_API_KEY
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

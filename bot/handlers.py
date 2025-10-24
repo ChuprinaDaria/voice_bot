@@ -7,12 +7,13 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from storage.database import SessionLocal
-from storage.models import ActivationCode, User
-from .keyboards import main_menu_keyboard, setup_menu_keyboard, api_keys_keyboard, language_keyboard, voice_control_keyboard
+from storage.models import ActivationCode, User, Conversation
+from .keyboards import main_menu_keyboard, setup_menu_keyboard, api_keys_keyboard, language_keyboard, voice_control_keyboard, music_control_keyboard
 from core.state_manager import voice_daemon_manager
 from core.api_manager import api_manager
 from integrations.mopidy import mopidy_manager
 from integrations.google_calendar import google_calendar_manager
+import random
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -464,8 +465,35 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text in ["✅ Завершити налаштування", "✅ Finish Setup", "✅ Einrichtung abschließen"]:
         await message.reply_text(
             ("Головне меню" if user.language == "uk" else "Main menu"),
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_keyboard(user.language),
         )
+    
+    # Керування музикою
+    elif text in ["🎵 Керування музикою", "🎵 Musiksteuerung", "🎵 Music Control",
+                  "⏸️ Пауза", "⏸️ Pause", "▶️ Продовжити", "▶️ Fortsetzen", "▶️ Resume",
+                  "⏭️ Наступна", "⏭️ Nächste", "⏭️ Next", "⏮️ Попередня", "⏮️ Vorherige", "⏮️ Previous",
+                  "⏹️ Зупинити музику", "⏹️ Musik stoppen", "⏹️ Stop Music"]:
+        db.close()
+        await music_control_handler(update, context)
+        return
+        
+    # Таймери
+    elif text in ["⏰ Таймер", "⏰ Timer"] or getattr(context, "user_data", {}).get('awaiting_timer'):
+        db.close()
+        await timer_handler(update, context)
+        return
+    
+    # Історія
+    elif text in ["📜 Історія", "📜 Verlauf", "📜 History"]:
+        db.close()
+        await history_handler(update, context)
+        return
+    
+    # Розваги (жарти/факти)
+    elif text in ["🎲 Розважити мене", "🎲 Unterhaltung", "🎲 Entertain me"]:
+        db.close()
+        await fun_handler(update, context)
+        return
 
     db.close()
 
@@ -724,5 +752,413 @@ async def personality_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=setup_menu_keyboard(user.language if user else "uk")
         )
         user_data['awaiting_personality'] = False
+    finally:
+        db.close()
+
+
+async def music_control_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробник керування музикою"""
+    tg_user = update.effective_user
+    message = update.message
+    
+    if tg_user is None or message is None:
+        return
+        
+    user_id = tg_user.id
+    text = message.text or ""
+    
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_user_id == user_id).first()
+        if not user:
+            await message.reply_text("❌ Користувач не знайдений")
+            return
+            
+        lang = user.language
+        
+        # Показуємо меню керування музикою
+        if text in ["🎵 Керування музикою", "🎵 Musiksteuerung", "🎵 Music Control"]:
+            # Перевіряємо чи грає музика
+            state = mopidy_manager.get_playback_state()
+            current = mopidy_manager.get_current_track()
+            
+            status_text = ""
+            if state == "playing" and current:
+                track_name = current.get("name", "Unknown")
+                artists = current.get("artists", [])
+                artist_name = artists[0].get("name", "Unknown") if artists else "Unknown"
+                
+                if lang == "uk":
+                    status_text = f"▶️ Зараз грає:\n🎵 {track_name} - {artist_name}\n\n"
+                elif lang == "de":
+                    status_text = f"▶️ Läuft gerade:\n🎵 {track_name} - {artist_name}\n\n"
+                else:
+                    status_text = f"▶️ Now playing:\n🎵 {track_name} - {artist_name}\n\n"
+            elif state == "paused":
+                if lang == "uk":
+                    status_text = "⏸️ Музика на паузі\n\n"
+                elif lang == "de":
+                    status_text = "⏸️ Musik pausiert\n\n"
+                else:
+                    status_text = "⏸️ Music paused\n\n"
+            else:
+                if lang == "uk":
+                    status_text = "⏹️ Музика не грає\n\n"
+                elif lang == "de":
+                    status_text = "⏹️ Keine Musik\n\n"
+                else:
+                    status_text = "⏹️ No music playing\n\n"
+            
+            menu_text = status_text
+            if lang == "uk":
+                menu_text += "Оберіть дію:"
+            elif lang == "de":
+                menu_text += "Wähle eine Aktion:"
+            else:
+                menu_text += "Choose action:"
+                
+            await message.reply_text(
+                menu_text,
+                reply_markup=music_control_keyboard(lang)
+            )
+            return
+            
+        # Пауза
+        if text in ["⏸️ Пауза", "⏸️ Pause"]:
+            success, msg = mopidy_manager.pause()
+            await message.reply_text(msg)
+            
+        # Продовжити
+        elif text in ["▶️ Продовжити", "▶️ Fortsetzen", "▶️ Resume"]:
+            success, msg = mopidy_manager.resume()
+            await message.reply_text(msg)
+            
+        # Наступна
+        elif text in ["⏭️ Наступна", "⏭️ Nächste", "⏭️ Next"]:
+            success, msg = mopidy_manager.next_track()
+            await message.reply_text(msg)
+            
+        # Попередня
+        elif text in ["⏮️ Попередня", "⏮️ Vorherige", "⏮️ Previous"]:
+            success, msg = mopidy_manager.previous_track()
+            await message.reply_text(msg)
+            
+        # Зупинити з дотепним коментарем
+        elif text in ["⏹️ Зупинити музику", "⏹️ Musik stoppen", "⏹️ Stop Music"]:
+            success, msg = mopidy_manager.stop()
+            
+            # Дотепні коментарі
+            if lang == "uk":
+                comments = [
+                    "⏹️ Зупинено! Нарешті тиша... 😌",
+                    "⏹️ Музика зупинена. Мої вушка відпочивають! 🎧",
+                    "⏹️ Тишаaa... Можна почути як думки літають 🦋",
+                    "⏹️ Зупинено! Час для серйозних справ 🧐",
+                    "⏹️ Музика OFF. Тепер я тут головний! 😎"
+                ]
+            elif lang == "de":
+                comments = [
+                    "⏹️ Gestoppt! Endlich Ruhe... 😌",
+                    "⏹️ Musik gestoppt. Meine Ohren ruhen! 🎧",
+                    "⏹️ Stille... Man kann die Gedanken fliegen hören 🦋",
+                    "⏹️ Gestoppt! Zeit für ernste Dinge 🧐",
+                    "⏹️ Musik AUS. Jetzt bin ich der Chef! 😎"
+                ]
+            else:
+                comments = [
+                    "⏹️ Stopped! Finally some peace... 😌",
+                    "⏹️ Music stopped. My ears are resting! 🎧",
+                    "⏹️ Silence... You can hear thoughts flying 🦋",
+                    "⏹️ Stopped! Time for serious business 🧐",
+                    "⏹️ Music OFF. Now I'm the boss here! 😎"
+                ]
+            
+            funny_msg = random.choice(comments)
+            await message.reply_text(funny_msg)
+            
+            # Сповіщаємо голосового бота що може слухати
+            try:
+                from core.tts import text_to_speech
+                # Відправляємо коротке голосове повідомлення
+                if lang == "uk":
+                    voice_msg = "Музику зупинено. Я слухаю!"
+                elif lang == "de":
+                    voice_msg = "Musik gestoppt. Ich höre!"
+                else:
+                    voice_msg = "Music stopped. I'm listening!"
+                    
+                audio_data = text_to_speech(user_id, voice_msg)
+                if audio_data:
+                    # Відправляємо голосове повідомлення в чат
+                    from io import BytesIO
+                    audio_file = BytesIO(audio_data)
+                    audio_file.name = "response.mp3"
+                    await message.reply_voice(audio_file)
+            except Exception as e:
+                print(f"⚠️ Не вдалося відправити голосове: {e}")
+            
+        # Назад
+        elif text in ["🔙 Назад", "🔙 Zurück", "🔙 Back"]:
+            await message.reply_text(
+                "🏠 Головне меню" if lang == "uk" else ("🏠 Hauptmenü" if lang == "de" else "🏠 Main menu"),
+                reply_markup=main_menu_keyboard(lang)
+            )
+            
+    finally:
+        db.close()
+
+
+async def timer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробник таймерів"""
+    tg_user = update.effective_user
+    message = update.message
+    
+    if tg_user is None or message is None:
+        return
+        
+    user_id = tg_user.id
+    text = message.text or ""
+    user_data = getattr(context, "user_data", {})
+    
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_user_id == user_id).first()
+        if not user:
+            await message.reply_text("❌ Користувач не знайдений")
+            return
+            
+        lang = user.language
+        
+        # Показуємо інструкцію
+        if text in ["⏰ Таймер", "⏰ Timer"]:
+            if lang == "uk":
+                await message.reply_text(
+                    "⏰ Встановлення таймера\n\n"
+                    "Надішли час у хвилинах, наприклад:\n"
+                    "• `5` - таймер на 5 хвилин\n"
+                    "• `10` - таймер на 10 хвилин\n"
+                    "• `30` - таймер на 30 хвилин\n\n"
+                    "Або скажи голосом:\n"
+                    "• 'Встанов таймер на 5 хвилин'\n"
+                    "• 'Нагадай через 10 хвилин'",
+                    parse_mode='Markdown',
+                    reply_markup=main_menu_keyboard(lang)
+                )
+            elif lang == "de":
+                await message.reply_text(
+                    "⏰ Timer einstellen\n\n"
+                    "Sende die Zeit in Minuten, z.B.:\n"
+                    "• `5` - Timer für 5 Minuten\n"
+                    "• `10` - Timer für 10 Minuten\n"
+                    "• `30` - Timer für 30 Minuten\n\n"
+                    "Oder sage mit Stimme:\n"
+                    "• 'Stelle Timer für 5 Minuten'\n"
+                    "• 'Erinnere in 10 Minuten'",
+                    parse_mode='Markdown',
+                    reply_markup=main_menu_keyboard(lang)
+                )
+            else:
+                await message.reply_text(
+                    "⏰ Set Timer\n\n"
+                    "Send time in minutes, e.g.:\n"
+                    "• `5` - timer for 5 minutes\n"
+                    "• `10` - timer for 10 minutes\n"
+                    "• `30` - timer for 30 minutes\n\n"
+                    "Or say by voice:\n"
+                    "• 'Set timer for 5 minutes'\n"
+                    "• 'Remind in 10 minutes'",
+                    parse_mode='Markdown',
+                    reply_markup=main_menu_keyboard(lang)
+                )
+            user_data['awaiting_timer'] = True
+            return
+            
+        # Обробляємо введений час
+        if user_data.get('awaiting_timer'):
+            try:
+                minutes = int(text)
+                if minutes <= 0 or minutes > 1440:  # Максимум 24 години
+                    if lang == "uk":
+                        await message.reply_text("❌ Час має бути від 1 до 1440 хвилин (24 години)")
+                    elif lang == "de":
+                        await message.reply_text("❌ Zeit muss zwischen 1 und 1440 Minuten (24 Stunden) sein")
+                    else:
+                        await message.reply_text("❌ Time must be between 1 and 1440 minutes (24 hours)")
+                    return
+                    
+                # Встановлюємо таймер
+                from datetime import datetime, timedelta
+                
+                end_time = datetime.now() + timedelta(minutes=minutes)
+                
+                # Зберігаємо таймер у context.job_queue
+                if hasattr(context, 'job_queue') and context.job_queue:
+                    # Callback для спрацювання таймера
+                    async def timer_callback(ctx):
+                        try:
+                            from core.tts import text_to_speech
+                            
+                            if lang == "uk":
+                                text_msg = f"⏰ Таймер на {minutes} хв спрацював!"
+                                voice_msg = f"Таймер на {minutes} хвилин спрацював!"
+                            elif lang == "de":
+                                text_msg = f"⏰ Timer für {minutes} Min ist abgelaufen!"
+                                voice_msg = f"Timer für {minutes} Minuten ist abgelaufen!"
+                            else:
+                                text_msg = f"⏰ Timer for {minutes} min is up!"
+                                voice_msg = f"Timer for {minutes} minutes is up!"
+                            
+                            # Текстове повідомлення
+                            await ctx.bot.send_message(
+                                chat_id=user_id,
+                                text=text_msg
+                            )
+                            
+                            # Голосове повідомлення
+                            try:
+                                audio_data = text_to_speech(user_id, voice_msg)
+                                if audio_data:
+                                    from io import BytesIO
+                                    audio_file = BytesIO(audio_data)
+                                    audio_file.name = "timer.mp3"
+                                    await ctx.bot.send_voice(
+                                        chat_id=user_id,
+                                        voice=audio_file
+                                    )
+                            except Exception as e:
+                                print(f"⚠️ Помилка відправки голосового таймера: {e}")
+                                
+                        except Exception as e:
+                            print(f"❌ Помилка в timer_callback: {e}")
+                    
+                    # Додаємо job
+                    context.job_queue.run_once(
+                        timer_callback,
+                        when=minutes * 60,  # в секундах
+                        name=f"timer_{user_id}_{minutes}",
+                        chat_id=user_id
+                    )
+                    
+                    if lang == "uk":
+                        await message.reply_text(
+                            f"✅ Таймер встановлено на {minutes} хв\n"
+                            f"⏰ Спрацює о {end_time.strftime('%H:%M')}",
+                            reply_markup=main_menu_keyboard(lang)
+                        )
+                    elif lang == "de":
+                        await message.reply_text(
+                            f"✅ Timer gestellt für {minutes} Min\n"
+                            f"⏰ Klingelt um {end_time.strftime('%H:%M')}",
+                            reply_markup=main_menu_keyboard(lang)
+                        )
+                    else:
+                        await message.reply_text(
+                            f"✅ Timer set for {minutes} min\n"
+                            f"⏰ Will ring at {end_time.strftime('%H:%M')}",
+                            reply_markup=main_menu_keyboard(lang)
+                        )
+                else:
+                    await message.reply_text("❌ Job queue not available")
+                    
+            except ValueError:
+                if lang == "uk":
+                    await message.reply_text("❌ Будь ласка, введіть число (кількість хвилин)")
+                elif lang == "de":
+                    await message.reply_text("❌ Bitte geben Sie eine Zahl ein (Anzahl Minuten)")
+                else:
+                    await message.reply_text("❌ Please enter a number (minutes)")
+                return
+                
+            user_data['awaiting_timer'] = False
+            
+    finally:
+        db.close()
+
+
+async def history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробник історії розмов"""
+    tg_user = update.effective_user
+    message = update.message
+    
+    if tg_user is None or message is None:
+        return
+        
+    user_id = tg_user.id
+    
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_user_id == user_id).first()
+        if not user:
+            await message.reply_text("❌ Користувач не знайдений")
+            return
+            
+        lang = user.language
+        
+        # Отримуємо історію з БД
+        from storage.models import Conversation
+        
+        conversations = db.query(Conversation).filter(
+            Conversation.user_id == user_id
+        ).order_by(Conversation.timestamp.desc()).limit(10).all()
+        
+        if not conversations:
+            if lang == "uk":
+                text = "📜 Історія розмов порожня\n\nПочніть спілкуватися з ботом голосом!"
+            elif lang == "de":
+                text = "📜 Gesprächsverlauf ist leer\n\nBeginnen Sie per Sprache mit dem Bot zu kommunizieren!"
+            else:
+                text = "📜 Conversation history is empty\n\nStart talking to the bot by voice!"
+            
+            await message.reply_text(text, reply_markup=main_menu_keyboard(lang))
+            return
+        
+        # Форматуємо історію
+        if lang == "uk":
+            text = "📜 Історія останніх 10 команд:\n\n"
+        elif lang == "de":
+            text = "📜 Verlauf der letzten 10 Befehle:\n\n"
+        else:
+            text = "📜 History of last 10 commands:\n\n"
+        
+        for i, conv in enumerate(reversed(conversations), 1):
+            time_str = conv.timestamp.strftime("%d.%m %H:%M")
+            cmd = conv.command[:40] + "..." if len(conv.command) > 40 else conv.command
+            resp = conv.response[:60] + "..." if len(conv.response) > 60 else conv.response
+            text += f"{i}. [{time_str}]\n"
+            text += f"   ❓ {cmd}\n"
+            text += f"   ✅ {resp}\n\n"
+        
+        await message.reply_text(text, reply_markup=main_menu_keyboard(lang))
+        
+    finally:
+        db.close()
+
+
+async def fun_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробник розваг (жарти/факти)"""
+    tg_user = update.effective_user
+    message = update.message
+    
+    if tg_user is None or message is None:
+        return
+        
+    user_id = tg_user.id
+    
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_user_id == user_id).first()
+        if not user:
+            await message.reply_text("❌ Користувач не знайдений")
+            return
+            
+        lang = user.language
+        
+        # Випадково обираємо жарт або факт
+        from integrations.fun import fun_manager
+        
+        success, message_text = fun_manager.get_random_fun(lang)
+        
+        await message.reply_text(message_text, reply_markup=main_menu_keyboard(lang))
+        
     finally:
         db.close()
