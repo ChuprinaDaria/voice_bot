@@ -4,6 +4,9 @@
 - ReSpeaker для відтворення
 """
 
+import os
+os.environ['JACK_NO_START_SERVER'] = '1'  # Заткнути Jack spam
+
 from typing import Optional
 import pyaudio
 import wave
@@ -27,13 +30,47 @@ class AudioManager:
         
         # INPUT: USB мікрофон (device 0)
         self.input_device_index = 0
-        self.device_rate = 44100
+        self.device_rate = 44100  # USB мікрофон працює на 44100
         
         # OUTPUT: ReSpeaker (device 1) - 2 канали для стерео
         self.output_device_index = 1
         
-        print(f"✅ INPUT: USB мікрофон (device {self.input_device_index})")
+        print(f"✅ INPUT: USB мікрофон (device {self.input_device_index}) @ {self.device_rate}Hz")
         print(f"✅ OUTPUT: ReSpeaker (device {self.output_device_index})")
+        print(f"✅ Whisper sample rate: {self.sample_rate}Hz")
+        
+        # Дебаг output device
+        self.debug_output_device()
+    
+    def debug_output_device(self):
+        """Показує параметри output пристрою"""
+        if self.output_device_index is None or self.pa is None:
+            print("❌ Output device не знайдено")
+            return
+        
+        try:
+            info = self.pa.get_device_info_by_index(self.output_device_index)
+            print(f"\n📊 OUTPUT DEVICE INFO:")
+            print(f"   Назва: {info['name']}")
+            print(f"   Channels: {info['maxOutputChannels']}")
+            print(f"   Default SR: {info['defaultSampleRate']}")
+            
+            # Тестуємо різні sample rates
+            test_rates = [8000, 16000, 22050, 24000, 44100, 48000]
+            print(f"\n🧪 Підтримувані sample rates:")
+            for rate in test_rates:
+                try:
+                    self.pa.is_format_supported(
+                        rate,
+                        output_device=self.output_device_index,
+                        output_channels=2,
+                        output_format=pyaudio.paInt16
+                    )
+                    print(f"   ✅ {rate}Hz")
+                except ValueError:
+                    print(f"   ❌ {rate}Hz")
+        except Exception as e:
+            print(f"⚠️  Помилка дебагу output device: {e}")
     
     def record_audio(self, duration: int = 5) -> bytes:
         """Записує N секунд аудіо з мікрофона"""
@@ -187,7 +224,7 @@ class AudioManager:
         return buffer.getvalue()
     
     def play_audio(self, audio_data: bytes) -> None:
-        """Відтворює аудіо (WAV або MP3)"""
+        """Відтворює аудіо (WAV або MP3) з auto-resampling"""
         print(f"🔊 Відтворення {len(audio_data)} bytes...")
         
         if self.pa is None:
@@ -200,29 +237,32 @@ class AudioManager:
             
             # Визначаємо формат
             if audio_data[:4] == b'RIFF':
-                # Це WAV
                 audio = AudioSegment.from_wav(BytesIO(audio_data))
                 print("   Формат: WAV")
             else:
-                # Це MP3
                 audio = AudioSegment.from_mp3(BytesIO(audio_data))
                 print("   Формат: MP3")
             
-            # Конвертуємо в RAW для PyAudio
+            print(f"   Оригінал: {audio.channels}ch, {audio.frame_rate}Hz, {audio.sample_width*8}bit")
+            
+            # RESAMPLE до підтримуваного rate (44100 або 48000)
+            target_rate = 48000  # ReSpeaker зазвичай підтримує 48kHz
+            if audio.frame_rate != target_rate:
+                print(f"   🔄 Resampling {audio.frame_rate}Hz → {target_rate}Hz")
+                audio = audio.set_frame_rate(target_rate)
+            
+            # Конвертуємо mono → stereo якщо треба
+            if audio.channels == 1:
+                print(f"   🔄 Конвертую mono → stereo")
+                audio = audio.set_channels(2)
+            
+            # Конвертуємо в RAW
             raw_data = audio.raw_data
             sample_width = audio.sample_width
             channels = audio.channels
             frame_rate = audio.frame_rate
             
-            print(f"   Параметри: {channels}ch, {frame_rate}Hz, {sample_width*8}bit")
-            
-            # Конвертуємо mono → stereo для ReSpeaker (якщо треба)
-            if channels == 1:
-                # Використовуємо pydub для конвертації
-                audio = audio.set_channels(2)
-                raw_data = audio.raw_data
-                channels = 2
-                print("   Конвертовано mono → stereo")
+            print(f"   ✅ Фінальні параметри: {channels}ch, {frame_rate}Hz, {sample_width*8}bit")
             
             # Відтворюємо
             stream = self.pa.open(
