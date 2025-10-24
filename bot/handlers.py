@@ -161,6 +161,20 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.close()
         return
 
+    # Перемкнути режим голосового управління
+    if text in ["🔄 Перемкнути режим", "🔄 Switch mode", "🔄 Modus wechseln"]:
+        # Зупиняємо поточний режим
+        voice_daemon_manager.stop_for_user(user_id)
+        
+        # Запускаємо в режимі wake word (звичайний режим)
+        started = voice_daemon_manager.start_for_user(user_id, listen_immediately=False)
+        if started:
+            await message.reply_text("🔄 Перемкнуто на режим wake word")
+        else:
+            await message.reply_text("ℹ️ Помилка перемикання режиму")
+        db.close()
+        return
+
     # Відкрити меню налаштувань
     if text in ["⚙️ Налаштування", "⚙️ Settings", "⚙️ Einstellungen"]:
         await message.reply_text(
@@ -521,6 +535,17 @@ async def voice_control_handler(update: Update, context: ContextTypes.DEFAULT_TY
             await message.reply_text("🔇 Голосовий режим вимкнено")
         else:
             await message.reply_text("ℹ️ Голосовий режим вже вимкнений")
+    
+    elif text in ["🔄 Перемкнути режим", "🔄 Switch mode", "🔄 Modus wechseln"]:
+        # Зупиняємо поточний режим
+        voice_daemon_manager.stop_for_user(user_id)
+        
+        # Запускаємо в режимі wake word (звичайний режим)
+        started = voice_daemon_manager.start_for_user(user_id, listen_immediately=False)
+        if started:
+            await message.reply_text("🔄 Перемкнуто на режим wake word")
+        else:
+            await message.reply_text("ℹ️ Помилка перемикання режиму")
 
 async def openai_key_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обробка введення OpenAI API ключа"""

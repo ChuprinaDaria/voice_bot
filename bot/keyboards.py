@@ -10,18 +10,21 @@ def main_menu_keyboard(language: str = "uk") -> ReplyKeyboardMarkup:
             [KeyboardButton(text="🎙️ Почати розмову"), KeyboardButton(text="⚙️ Налаштування")],
             [KeyboardButton(text="🎵 Керування музикою"), KeyboardButton(text="⏰ Таймер")],
             [KeyboardButton(text="📜 Історія"), KeyboardButton(text="🎲 Розважити мене")],
+            [KeyboardButton(text="🔄 Перемкнути режим"), KeyboardButton(text="🎤 Увімкнути голос")],
         ]
     elif language == "de":
         buttons = [
             [KeyboardButton(text="🎙️ Gespräch starten"), KeyboardButton(text="⚙️ Einstellungen")],
             [KeyboardButton(text="🎵 Musiksteuerung"), KeyboardButton(text="⏰ Timer")],
             [KeyboardButton(text="📜 Verlauf"), KeyboardButton(text="🎲 Unterhaltung")],
+            [KeyboardButton(text="🔄 Modus wechseln"), KeyboardButton(text="🎤 Stimme aktivieren")],
         ]
     else:  # en
         buttons = [
             [KeyboardButton(text="🎙️ Start conversation"), KeyboardButton(text="⚙️ Settings")],
             [KeyboardButton(text="🎵 Music Control"), KeyboardButton(text="⏰ Timer")],
             [KeyboardButton(text="📜 History"), KeyboardButton(text="🎲 Entertain me")],
+            [KeyboardButton(text="🔄 Switch mode"), KeyboardButton(text="🎤 Enable Voice")],
         ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 

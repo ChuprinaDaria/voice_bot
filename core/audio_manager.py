@@ -82,6 +82,7 @@ class AudioManager:
     ) -> bytes:
         """Записує поки не буде тиша"""
         print("🎤 Запис до тиші...")
+        print(f"  📋 Параметри: поріг={silence_threshold}, тривалість_тиші={silence_duration}s, макс={max_duration}s")
         
         if self.pa is None:
             raise RuntimeError("AudioManager не ініціалізований. Викличте __init__ або перезапустіть.")
@@ -109,6 +110,10 @@ class AudioManager:
             # Перевіряємо рівень звуку
             rms = audioop.rms(data, 2)
             
+            # ДОДАЙ ЦЕ - показуємо RMS кожні 20 chunks
+            if len(frames) % 20 == 0:
+                print(f"  📊 RMS: {rms}, Тиша: {silent_chunks}/{chunks_per_silence}, Поріг: {silence_threshold}")
+            
             if rms < silence_threshold:
                 silent_chunks += 1
             else:
@@ -120,6 +125,16 @@ class AudioManager:
                 
         elapsed = time.time() - start_time
         print(f"✅ Записано {elapsed:.1f}s")
+        
+        # Отримуємо останній RMS значення
+        last_rms = 0
+        if frames:
+            try:
+                last_rms = audioop.rms(frames[-1], 2)
+            except:
+                last_rms = 0
+        
+        print(f"  📊 Підсумок: {len(frames)} chunks, останній RMS: {last_rms}")
         
         stream.stop_stream()
         stream.close()
