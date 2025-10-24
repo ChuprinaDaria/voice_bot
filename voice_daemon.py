@@ -95,8 +95,12 @@ class VoiceDaemon:
         import time
         time.sleep(0.3)
         
-        # Записуємо через arecord (обходить конфлікт з WakeWordDetector який тримає Device 0)
-        audio_data = self.audio._record_with_arecord(max_duration=10)
+        # Записуємо аудіо (до тиші або макс 10 сек)
+        audio_data = self.audio.record_until_silence(
+            silence_threshold=500,
+            silence_duration=1.5,
+            max_duration=10
+        )
         
         # КРИТИЧНО: звільняємо PyAudio ресурси перед відновленням VAD
         try:
