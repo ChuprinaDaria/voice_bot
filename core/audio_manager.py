@@ -224,16 +224,12 @@ class AudioManager:
         return buffer.getvalue()
     
     def play_audio(self, audio_data: bytes) -> None:
-        """Відтворює аудіо (WAV або MP3) з auto-resampling"""
+        """Відтворює аудіо через simpleaudio (найстабільніше на Pi)"""
         print(f"🔊 Відтворення {len(audio_data)} bytes...")
-        
-        if self.pa is None:
-            print("⚠️  PyAudio не ініціалізовано, використовую aplay")
-            self._play_with_aplay(audio_data)
-            return
         
         try:
             from pydub import AudioSegment
+            import simpleaudio as sa
             
             # Визначаємо формат
             if audio_data[:4] == b'RIFF':
@@ -242,65 +238,37 @@ class AudioManager:
                 audio = AudioSegment.from_mp3(BytesIO(audio_data))
             
             print(f"   Формат: {'WAV' if audio_data[:4] == b'RIFF' else 'MP3'}")
-            print(f"   Оригінал: {audio.channels}ch, {audio.frame_rate}Hz, {audio.sample_width*8}bit")
+            print(f"   Оригінал: {audio.channels}ch, {audio.frame_rate}Hz")
             
-            # RESAMPLE до підтримуваного rate
-            target_rate = 48000
-            if audio.frame_rate != target_rate:
-                print(f"   🔄 Resampling {audio.frame_rate}Hz → {target_rate}Hz")
-                audio = audio.set_frame_rate(target_rate)
+            # Конвертуємо до підтримуваного формату
+            # simpleaudio любить 44100 Hz, 16-bit, stereo
+            if audio.frame_rate != 44100:
+                print(f"   🔄 Resampling {audio.frame_rate}Hz → 44100Hz")
+                audio = audio.set_frame_rate(44100)
             
-            # Конвертуємо mono → stereo
             if audio.channels == 1:
                 print(f"   🔄 Конвертую mono → stereo")
                 audio = audio.set_channels(2)
             
-            raw_data = audio.raw_data
-            sample_width = audio.sample_width
-            channels = audio.channels
-            frame_rate = audio.frame_rate
+            if audio.sample_width != 2:  # 16-bit
+                print(f"   🔄 Конвертую до 16-bit")
+                audio = audio.set_sample_width(2)
             
-            print(f"   ✅ Фінальні параметри: {channels}ch, {frame_rate}Hz, {sample_width*8}bit")
+            print(f"   ✅ Параметри: {audio.channels}ch, {audio.frame_rate}Hz, 16bit")
+            print(f"   ▶️ Відтворюю...")
             
-            # ВАЖЛИВО: chunk size для 48kHz stereo
-            # 1024 frames * 2 channels * 2 bytes = 4096 bytes
-            chunk_frames = 1024
-            chunk_bytes = chunk_frames * channels * sample_width
-            
-            print(f"   📦 Chunk size: {chunk_frames} frames = {chunk_bytes} bytes")
-            
-            # Відкриваємо stream з правильними параметрами
-            stream = self.pa.open(
-                format=self.pa.get_format_from_width(sample_width),
-                channels=channels,
-                rate=frame_rate,
-                output=True,
-                output_device_index=self.output_device_index,
-                frames_per_buffer=chunk_frames  # ВАЖЛИВО!
+            # Відтворюємо через simpleaudio
+            play_obj = sa.play_buffer(
+                audio.raw_data,
+                num_channels=audio.channels,
+                bytes_per_sample=audio.sample_width,
+                sample_rate=audio.frame_rate
             )
             
-            print(f"   ▶️ Відтворюю {len(raw_data)} bytes...")
+            # Чекаємо завершення
+            play_obj.wait_done()
             
-            # Пишемо по чанках
-            bytes_written = 0
-            for i in range(0, len(raw_data), chunk_bytes):
-                chunk = raw_data[i:i + chunk_bytes]
-                stream.write(chunk)
-                bytes_written += len(chunk)
-                
-                # Прогрес кожні 10%
-                progress = (bytes_written / len(raw_data)) * 100
-                if progress % 10 < 0.1:  # грубо кожні 10%
-                    print(f"   📊 {progress:.0f}%", end='\r')
-            
-            print(f"\n   ✅ Відтворено {bytes_written} bytes")
-            
-            # Чекаємо поки все відтвориться
-            import time
-            time.sleep(0.1)
-            
-            stream.stop_stream()
-            stream.close()
+            print(f"   ✅ Відтворено")
             
         except Exception as e:
             print(f"❌ Помилка відтворення: {e}")
